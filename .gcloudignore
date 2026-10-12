@@ -1,0 +1,11 @@
+.git
+.gitignore
+.gcloudignore
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+*.log
+*.ps1
+README.md

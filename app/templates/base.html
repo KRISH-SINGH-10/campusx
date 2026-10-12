@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ app_name }}{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+          colors: { brand: { 50: '#eef4ff', 100: '#dbe7ff', 500: '#3b6ef6', 600: '#2957e0', 700: '#1f45b8' } }
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="min-h-screen bg-slate-50 font-sans text-slate-800 antialiased">
+  <header class="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur">
+    <div class="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+      <a href="/" class="flex items-center gap-2">
+        <span class="grid h-8 w-8 place-items-center rounded-lg bg-brand-600 text-sm font-bold text-white">CX</span>
+        <span class="text-lg font-semibold tracking-tight">{{ app_name }}</span>
+      </a>
+      <nav class="flex items-center gap-1 text-sm font-medium">
+        <a href="/" class="nav-link {% if active == 'home' %}nav-link-active{% endif %}">Home</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-5xl px-4 py-8">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="mx-auto max-w-5xl px-4 pb-8 text-xs text-slate-400">
+    {{ app_name }} · {{ tagline }} · Built on Cloud Run, Firestore, and Gemini on Vertex AI
+  </footer>
+
+  <div id="toast" class="pointer-events-none fixed bottom-5 left-1/2 hidden -translate-x-1/2 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white shadow-lg"></div>
+  <script src="/static/app.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>
