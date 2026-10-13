@@ -20,7 +20,7 @@
       </span>
       <div>
         <h2 class="card-title">Check your documents</h2>
-        <p class="text-xs text-slate-500">PDF or a clear photo. Up to 25 MB per file, 30 MB in total.</p>
+        <p class="text-xs text-slate-500">PDF or a clear photo. Large photos are compressed for you automatically.</p>
       </div>
     </div>
     <form id="upload-form" class="mt-5 space-y-5">
@@ -145,10 +145,37 @@
   let policy = null;
   const size = (n) => n < 1024 * 1024 ? Math.max(1, Math.round(n / 1024)) + ' KB' : (n / 1024 / 1024).toFixed(1) + ' MB';
 
+  // Phone photos are often 5-12 MB. Shrink them in the browser before upload, keeping
+  // enough resolution for the text to stay readable. PDFs are sent as they are.
+  const COMPRESS_ABOVE = 1.5 * 1024 * 1024;
+  const MAX_EDGE = 2200;
+  async function compressImage(file) {
+    if (!file.type.startsWith('image/') || file.size < COMPRESS_ABOVE) return file;
+    try {
+      const bitmap = await createImageBitmap(file);
+      const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(bitmap.width * scale);
+      canvas.height = Math.round(bitmap.height * scale);
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.82));
+      if (!blob || blob.size >= file.size) return file;
+      const small = new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
+      small.originalSize = file.size;
+      return small;
+    } catch (e) {
+      return file;  // any problem: upload the original untouched
+    }
+  }
+
   function fileRow(file, onRemove) {
     const li = el('li', 'file-chip');
     const info = el('span', 'min-w-0 truncate');
     info.append(el('span', 'font-medium text-slate-800', file.name), el('span', 'text-slate-400', ' · ' + size(file.size)));
+    if (file.originalSize) info.append(el('span', 'font-medium text-emerald-700', ' · compressed from ' + size(file.originalSize)));
     const remove = el('button', 'shrink-0 text-xs font-semibold text-slate-400 hover:text-red-600', 'Remove');
     remove.type = 'button';
     remove.addEventListener('click', onRemove);
@@ -164,17 +191,20 @@
     pl.replaceChildren(...(policy ? [fileRow(policy, () => { policy = null; renderFiles(); })] : []));
   }
 
-  document.getElementById('bill-file').addEventListener('change', (e) => {
-    for (const f of e.target.files) {
+  document.getElementById('bill-file').addEventListener('change', async (e) => {
+    const picked = [...e.target.files];
+    e.target.value = '';
+    for (const original of picked) {
       if (bills.length >= MAX_BILLS) { toast('You can attach up to ' + MAX_BILLS + ' bills per claim.'); break; }
+      const f = await compressImage(original);
       if (!bills.some((b) => b.name === f.name && b.size === f.size)) bills.push(f);
+      renderFiles();
     }
-    e.target.value = '';
-    renderFiles();
   });
-  document.getElementById('policy-file').addEventListener('change', (e) => {
-    policy = e.target.files[0] || policy;
+  document.getElementById('policy-file').addEventListener('change', async (e) => {
+    const picked = e.target.files[0];
     e.target.value = '';
+    if (picked) policy = await compressImage(picked);
     renderFiles();
   });
 
