@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from app.claims import engine, extract
 from app.claims.schemas import Bill, Policy
-from app.services import ai, db
+from app.services import ai, db, storage
 
 log = logging.getLogger("claimclear")
 
@@ -41,15 +41,44 @@ def _room_curve(bill: Bill, policy: Policy) -> list[dict]:
     return [{"rent": r, **engine.simulate_room(bill, policy, r)} for r in points]
 
 
+_EXT = {"application/pdf": "pdf", "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}
+
+
+def _store_documents(bill_bytes: bytes, bill_mime: str, policy_bytes: bytes, policy_mime: str) -> dict:
+    """Keep the originals so the insurer can open them. A storage failure must not block the decision."""
+    out = {}
+    for kind, data, mime in (("bill", bill_bytes, bill_mime), ("policy", policy_bytes, policy_mime)):
+        name = f"{kind}/{hashlib.sha256(data).hexdigest()[:32]}.{_EXT.get(mime, 'bin')}"
+        try:
+            out[kind] = storage.save(name, data, mime)
+        except Exception as e:
+            log.warning("storing %s failed: %s", kind, e)
+    return out
+
+
+def reviewer_summary(claim: dict) -> str:
+    return _plain(
+        "You are assisting a health insurance claims reviewer. From the facts below, write exactly three "
+        "short bullet points starting with '- ': (1) the single largest driver of the deduction, with its "
+        "amount; (2) anything the reviewer should verify with the hospital, such as possible overbilling; "
+        "(3) whether the recommended payable amount follows from the cited clauses. Use only the facts "
+        "given. Under 80 words in total.\n\n" + _facts(claim),
+        temperature=0.2,
+    )
+
+
 def create_claim(bill_bytes: bytes, bill_mime: str, policy_bytes: bytes, policy_mime: str) -> dict:
     with ThreadPoolExecutor(max_workers=2) as pool:
         bill_job = pool.submit(_cached, "bill", bill_bytes, bill_mime)
         policy_job = pool.submit(_cached, "policy", policy_bytes, policy_mime)
+        docs_job = pool.submit(_store_documents, bill_bytes, bill_mime, policy_bytes, policy_mime)
         bill = Bill.model_validate(bill_job.result())
         policy = Policy.model_validate(policy_job.result())
+        documents = docs_job.result()
     return db.add(
         CLAIMS,
         {
+            "documents": documents,
             "bill": bill.model_dump(),
             "policy": policy.model_dump(),
             "result": engine.adjudicate(bill, policy),

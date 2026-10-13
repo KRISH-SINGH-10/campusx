@@ -36,7 +36,8 @@
       <p id="sim-cap" class="text-xs text-slate-500"></p>
     </div>
     <p class="mt-1 text-sm text-slate-600">Choosing a room above the policy limit cuts more than the room rent: doctor, surgery, nursing and test charges are reduced in the same ratio. Move the slider to see the effect.</p>
-    <input id="sim-range" type="range" class="mt-4 w-full accent-brand-600" min="0" step="1">
+    <svg id="sim-chart" class="mt-4 w-full" viewBox="0 0 600 150" role="img" aria-label="Out-of-pocket amount by room rent"></svg>
+    <input id="sim-range" type="range" class="mt-1 w-full accent-brand-600" min="0" step="1">
     <div class="mt-3 grid grid-cols-3 gap-3 text-center">
       <div><p class="stat-label">Room rent per day</p><p id="sim-rent" class="text-lg font-semibold text-slate-900"></p></div>
       <div><p class="stat-label">Insurer pays</p><p id="sim-pay" class="text-lg font-semibold text-green-700"></p></div>
@@ -57,6 +58,13 @@
   </section>
 
   {% if role == 'insurer' %}
+  <section class="card mb-6">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <h2 class="card-title">Reviewer summary</h2>
+      <div id="doc-links" class="flex gap-3 text-xs font-medium"></div>
+    </div>
+    <div id="review-out" class="ai-output mt-3 text-sm text-slate-700">Writing summary…</div>
+  </section>
   <section class="card mb-6">
     <h2 class="card-title">Decision</h2>
     <p class="mt-1 text-sm text-slate-600">The recommended payable amount is above. Record your decision; the patient sees it immediately.</p>
@@ -196,8 +204,38 @@
     const start = curve.findIndex((p) => p.rent === Math.round(room.billed_per_day));
     range.value = start < 0 ? 0 : start;
     const billedPoint = curve[start < 0 ? 0 : start];
+
+    // Chart: what the patient pays at each room price, with the policy limit marked.
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = $('sim-chart');
+    const W = 600, H = 150, L = 8, R = 8, T = 22, B = 20;
+    const minR = curve[0].rent, maxR = curve[curve.length - 1].rent;
+    const maxY = Math.max(...curve.map((p) => p.you_pay)) || 1;
+    const x = (r) => L + ((r - minR) / (maxR - minR)) * (W - L - R);
+    const y = (v) => T + (1 - v / maxY) * (H - T - B);
+    const node = (tag, attrs, text) => {
+      const n = document.createElementNS(NS, tag);
+      for (const k in attrs) n.setAttribute(k, attrs[k]);
+      if (text) n.textContent = text;
+      return n;
+    };
+    const pts = curve.map((p) => x(p.rent) + ',' + y(p.you_pay)).join(' ');
+    svg.replaceChildren(
+      node('polygon', { points: L + ',' + (H - B) + ' ' + pts + ' ' + (W - R) + ',' + (H - B), fill: '#fee2e2', opacity: '0.6' }),
+      node('polyline', { points: pts, fill: 'none', stroke: '#b91c1c', 'stroke-width': '2.5', 'stroke-linejoin': 'round' }),
+      node('line', { x1: x(room.cap_per_day), x2: x(room.cap_per_day), y1: T - 4, y2: H - B, stroke: '#2957e0', 'stroke-width': '1.5', 'stroke-dasharray': '4 3' }),
+      node('text', { x: x(room.cap_per_day) + 5, y: T + 4, 'font-size': '11', fill: '#2957e0', 'font-weight': '600' }, 'Policy limit'),
+      node('text', { x: L, y: 12, 'font-size': '11', fill: '#64748b' }, 'You pay'),
+      node('text', { x: L, y: H - 5, 'font-size': '10', fill: '#94a3b8' }, rs(minR)),
+      node('text', { x: W - R, y: H - 5, 'font-size': '10', fill: '#94a3b8', 'text-anchor': 'end' }, rs(maxR) + ' per day'),
+    );
+    const dot = node('circle', { r: '6', fill: '#b91c1c', stroke: '#fff', 'stroke-width': '2' });
+    svg.append(dot);
+
     const show = () => {
       const p = curve[Number(range.value)];
+      dot.setAttribute('cx', x(p.rent));
+      dot.setAttribute('cy', y(p.you_pay));
       $('sim-rent').textContent = rs(p.rent);
       $('sim-pay').textContent = rs(p.payable);
       $('sim-you').textContent = rs(p.you_pay);
@@ -231,6 +269,19 @@
     renderSim(claim);
     $('loading').classList.add('hidden');
     $('claim').classList.remove('hidden');
+    if (ROLE === 'insurer') {
+      const links = $('doc-links');
+      for (const kind of ['bill', 'policy']) {
+        if (!(claim.documents || {})[kind]) continue;
+        const a = el('a', 'text-brand-600 underline', 'Open original ' + kind);
+        a.href = '/api/claims/' + CLAIM_ID + '/documents/' + kind;
+        a.target = '_blank';
+        links.append(a);
+      }
+      api('/api/claims/' + CLAIM_ID + '/review', { method: 'POST' })
+        .then((d) => { $('review-out').textContent = d.text; })
+        .catch(() => { $('review-out').textContent = 'Summary unavailable. The decision above is unaffected.'; });
+    }
     if (ROLE === 'patient') {
       setInterval(async () => {
         try { renderStatus(await api('/api/claims/' + CLAIM_ID)); } catch (e) {}

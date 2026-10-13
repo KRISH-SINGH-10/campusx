@@ -2,14 +2,14 @@ from pathlib import Path
 from typing import Literal, Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
 from app import config
 from app.claims import service
-from app.services import ai, db
+from app.services import ai, db, storage
 
 BASE = Path(__file__).parent
 SAMPLES_DIR = BASE / "static" / "samples"
@@ -170,6 +170,28 @@ def claims_appeal(claim_id: str):
         return {"text": service.appeal_letter(claim)}
     except Exception as e:
         raise HTTPException(502, f"Could not draft the letter: {str(e)[:200]}")
+
+
+@app.post("/api/claims/{claim_id}/review")
+def claims_review(claim_id: str):
+    claim = _claim_or_404(claim_id)
+    try:
+        return {"text": service.reviewer_summary(claim)}
+    except Exception as e:
+        raise HTTPException(502, f"Could not write the summary: {str(e)[:200]}")
+
+
+@app.get("/api/claims/{claim_id}/documents/{kind}")
+def claims_document(claim_id: str, kind: Literal["bill", "policy"]):
+    """Serve an original document from the private bucket."""
+    name = (_claim_or_404(claim_id).get("documents") or {}).get(kind)
+    if not name:
+        raise HTTPException(404, "Document not stored for this claim.")
+    try:
+        data, mime_type = storage.load(name)
+    except Exception as e:
+        raise HTTPException(502, f"Could not open the document: {str(e)[:200]}")
+    return Response(data, media_type=mime_type, headers={"Content-Disposition": "inline"})
 
 
 class DecisionIn(BaseModel):
