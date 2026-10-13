@@ -1,3 +1,4 @@
+import hashlib
 import logging
 from pathlib import Path
 from typing import Literal, Optional
@@ -27,6 +28,12 @@ app.add_middleware(
 )
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 templates = Jinja2Templates(directory=BASE / "templates")
+
+# Changes whenever the stylesheet or script changes, so browsers never pair a new
+# page with a cached old stylesheet.
+ASSET_VERSION = hashlib.sha256(
+    (BASE / "static" / "app.css").read_bytes() + (BASE / "static" / "app.js").read_bytes()
+).hexdigest()[:10]
 
 CLAIMS = service.CLAIMS
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
@@ -60,6 +67,7 @@ def page(request: Request, name: str, **ctx) -> HTMLResponse:
         {
             "app_name": config.APP_NAME,
             "tagline": config.APP_TAGLINE,
+            "asset_version": ASSET_VERSION,
             "user": auth.current(request),
             **ctx,
         },
