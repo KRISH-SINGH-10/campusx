@@ -41,7 +41,7 @@
       const row = el('a', 'flex items-center justify-between gap-3 px-5 py-4 hover:bg-slate-50');
       row.href = '/insurer/claims/' + c.id;
       const left = el('div', 'min-w-0');
-      left.append(el('p', 'truncate text-sm font-semibold text-slate-900', c.patient_name + ' · ' + c.procedure));
+      left.append(el('p', 'truncate text-sm font-semibold text-slate-900', c.patient_name + ' · ' + c.title));
       const meta = el('p', 'text-xs text-slate-500', c.hospital_name + ' · billed ' + rs(c.totals.billed) + ' · payable ' + rs(c.totals.payable));
       left.append(meta);
       if (c.overbilling_count) left.append(el('p', 'mt-1 text-xs font-medium text-amber-700', c.overbilling_count + ' possible overbilling ' + (c.overbilling_count === 1 ? 'item' : 'items')));

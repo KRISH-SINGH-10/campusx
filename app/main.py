@@ -184,7 +184,13 @@ async def claims_create(
         raise HTTPException(400, "Attach both the hospital bill and the policy document.")
 
     try:
-        claim = service.create_claim(*bill_doc, *policy_doc, owner=user["email"])
+        claim = service.create_claim(
+            *bill_doc,
+            *policy_doc,
+            owner=user["email"],
+            submitted_by=user["name"],
+            sample_title=SAMPLE_BILLS[sample]["title"] if sample else None,
+        )
     except Exception as e:
         raise HTTPException(502, f"Could not read the documents: {str(e)[:200]}")
     if not claim["bill"]["items"]:
@@ -209,6 +215,8 @@ def claims_list(request: Request):
             "id": c["id"],
             "created_at": c.get("created_at"),
             "status": c.get("status"),
+            "title": c.get("title") or c["bill"]["procedure"],
+            "sample": c.get("sample", False),
             "patient_name": c["bill"]["patient_name"],
             "hospital_name": c["bill"]["hospital_name"],
             "procedure": c["bill"]["procedure"],
@@ -239,10 +247,10 @@ def claims_explain(request: Request, claim_id: str, body: ExplainIn):
 
 
 @app.post("/api/claims/{claim_id}/appeal")
-def claims_appeal(request: Request, claim_id: str):
+def claims_appeal(request: Request, claim_id: str, body: ExplainIn):
     claim = _claim_for(request, claim_id, "customer")
     try:
-        return {"text": service.appeal_letter(claim)}
+        return {"text": service.appeal_letter(claim, body.language)}
     except Exception as e:
         raise HTTPException(502, f"Could not draft the letter: {str(e)[:200]}")
 

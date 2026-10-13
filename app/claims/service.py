@@ -70,7 +70,13 @@ def reviewer_summary(claim: dict) -> str:
 
 
 def create_claim(
-    bill_bytes: bytes, bill_mime: str, policy_bytes: bytes, policy_mime: str, owner: str
+    bill_bytes: bytes,
+    bill_mime: str,
+    policy_bytes: bytes,
+    policy_mime: str,
+    owner: str,
+    submitted_by: str,
+    sample_title: str | None = None,
 ) -> dict:
     with ThreadPoolExecutor(max_workers=2) as pool:
         bill_job = pool.submit(_cached, "bill", bill_bytes, bill_mime)
@@ -79,9 +85,15 @@ def create_claim(
         bill = Bill.model_validate(bill_job.result())
         policy = Policy.model_validate(policy_job.result())
         documents = docs_job.result()
+    if sample_title:
+        # A sample bill is a worked example, so it is filed under the signed-in customer's own name.
+        bill.patient_name = submitted_by
     return db.add(
         CLAIMS,
         {
+            "title": sample_title or bill.procedure or bill.diagnosis or "Hospital claim",
+            "sample": bool(sample_title),
+            "submitted_by": submitted_by,
             "documents": documents,
             "bill": bill.model_dump(),
             "policy": policy.model_dump(),
@@ -135,8 +147,9 @@ def explain(claim: dict, language: str) -> str:
     )
 
 
-def appeal_letter(claim: dict) -> str:
+def appeal_letter(claim: dict, language: str = "English") -> str:
     return _plain(
+        f"Write the whole letter in {language}; keep names, clause numbers and rupee amounts as they are. "
         "Draft a formal grievance letter from the patient to the insurer's grievance officer about this "
         "claim. Ask for a written, clause-by-clause justification of each deduction and for review of any "
         "deduction not clearly supported by the cited clause. Raise the possible overbilling items as a "

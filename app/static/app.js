@@ -41,7 +41,7 @@ function toast(message) {
 async function withBusy(button, fn) {
   const original = button.innerHTML;
   button.disabled = true;
-  button.innerHTML = '<span class="spinner"></span>Working…';
+  button.innerHTML = '<span class="spinner"></span>' + (button.dataset.busy || 'Working…');
   try {
     return await fn();
   } catch (e) {

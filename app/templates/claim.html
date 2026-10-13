@@ -6,8 +6,9 @@
   <div class="mb-6 flex flex-wrap items-start justify-between gap-3">
     <div>
       <a href="{{ '/insurer' if role == 'insurer' else '/' }}" class="text-xs font-medium text-slate-500 hover:text-slate-800">&larr; {{ 'Claims queue' if role == 'insurer' else 'New check' }}</a>
-      <h1 id="c-title" class="mt-1 text-2xl font-bold tracking-tight text-slate-900"></h1>
-      <p id="c-sub" class="text-sm text-slate-500"></p>
+      <h1 class="mt-1 flex flex-wrap items-center gap-2 text-2xl font-bold tracking-tight text-slate-900"><span id="c-title"></span><span id="c-sample" class="pill pill-info hidden">Example</span></h1>
+      <p id="c-sub" class="mt-1 text-sm text-slate-600"></p>
+      <dl id="c-meta" class="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500"></dl>
     </div>
     <span id="c-status" class="pill"></span>
   </div>
@@ -72,26 +73,29 @@
     <div class="mt-3 flex flex-wrap gap-2">
       <button class="btn decide" data-status="approved" type="button">Approve payable amount</button>
       <button class="btn btn-ghost decide" data-status="queried" type="button">Raise a query</button>
-      <button class="btn btn-ghost decide" data-status="rejected" type="button">Reject</button>
+      <button class="btn btn-danger decide" data-status="rejected" type="button">Reject</button>
     </div>
   </section>
   {% else %}
   <section class="grid gap-4 lg:grid-cols-2">
     <div class="card">
       <h2 class="card-title">Explain it simply</h2>
+      <p class="mt-1 text-sm text-slate-600">The decision in plain words, for the family member at the billing desk.</p>
       <div class="mt-3 flex flex-wrap gap-2">
-        <button class="btn btn-ghost explain" data-lang="English" type="button">English</button>
-        <button class="btn btn-ghost explain" data-lang="Hindi" type="button">हिन्दी</button>
-        <button class="btn btn-ghost explain" data-lang="Marathi" type="button">मराठी</button>
+        <button class="lang-btn explain" data-lang="English" type="button">English</button>
+        <button class="lang-btn explain" data-lang="Hindi" type="button">हिन्दी</button>
+        <button class="lang-btn explain" data-lang="Marathi" type="button">मराठी</button>
       </div>
       <div id="explain-out" class="ai-output mt-4 hidden rounded-lg bg-slate-50 p-3 text-sm text-slate-700"></div>
     </div>
     <div class="card">
       <h2 class="card-title">Dispute a deduction</h2>
       <p class="mt-1 text-sm text-slate-600">Drafts a grievance letter that quotes the policy's own clauses.</p>
-      <div class="mt-3 flex gap-2">
-        <button id="appeal-btn" class="btn" type="button">Draft appeal letter</button>
-        <button id="appeal-copy" class="btn btn-ghost hidden" type="button">Copy</button>
+      <div class="mt-3 flex flex-wrap items-center gap-2">
+        <button class="lang-btn appeal" data-lang="English" type="button">English</button>
+        <button class="lang-btn appeal" data-lang="Hindi" type="button">हिन्दी</button>
+        <button class="lang-btn appeal" data-lang="Marathi" type="button">मराठी</button>
+        <button id="appeal-copy" class="btn btn-ghost ml-auto hidden !py-1.5 text-xs" type="button">Copy letter</button>
       </div>
       <div id="appeal-out" class="ai-output mt-4 hidden rounded-lg bg-slate-50 p-3 text-sm text-slate-700"></div>
     </div>
@@ -258,8 +262,19 @@
   async function load() {
     const claim = await api('/api/claims/' + CLAIM_ID);
     const b = claim.bill, t = claim.result.totals;
-    $('c-title').textContent = b.procedure;
-    $('c-sub').textContent = b.patient_name + ' · ' + b.hospital_name + ' · ' + claim.policy.policy_name;
+    $('c-title').textContent = claim.title || b.procedure;
+    $('c-sample').classList.toggle('hidden', !claim.sample);
+    $('c-sub').textContent = b.procedure + (b.diagnosis ? ' for ' + b.diagnosis.toLowerCase() : '');
+    const meta = $('c-meta');
+    meta.replaceChildren();
+    const facts = [['Patient', b.patient_name], ['Hospital', b.hospital_name], ['Policy', claim.policy.policy_name], ['Insurer', claim.policy.insurer]];
+    if (claim.submitted_by && claim.submitted_by !== b.patient_name) facts.push(['Submitted by', claim.submitted_by]);
+    for (const [k, v] of facts) {
+      if (!v) continue;
+      const item = el('div', 'flex gap-1');
+      item.append(el('dt', 'font-medium text-slate-400', k + ':'), el('dd', 'text-slate-600', v));
+      meta.append(item);
+    }
     $('t-billed').textContent = rs(t.billed);
     $('t-payable').textContent = rs(t.payable);
     $('t-pct').textContent = t.covered_percent + '% of the bill';
@@ -297,14 +312,15 @@
     }));
   });
 
-  const appealBtn = $('appeal-btn');
-  if (appealBtn) {
-    appealBtn.addEventListener('click', () => withBusy(appealBtn, async () => {
-      const data = await api('/api/claims/' + CLAIM_ID + '/appeal', { method: 'POST' });
+  document.querySelectorAll('.appeal').forEach((btn) => {
+    btn.addEventListener('click', () => withBusy(btn, async () => {
+      const data = await api('/api/claims/' + CLAIM_ID + '/appeal', { json: { language: btn.dataset.lang } });
       $('appeal-out').textContent = data.text;
       $('appeal-out').classList.remove('hidden');
       $('appeal-copy').classList.remove('hidden');
     }));
+  });
+  if ($('appeal-copy')) {
     $('appeal-copy').addEventListener('click', async () => {
       await navigator.clipboard.writeText($('appeal-out').textContent);
       toast('Letter copied');

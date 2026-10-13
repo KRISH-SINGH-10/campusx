@@ -5,50 +5,63 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ app_name }}{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;600&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       theme: {
         extend: {
-          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
-          colors: { brand: { 50: '#eef4ff', 100: '#dbe7ff', 500: '#3b6ef6', 600: '#2957e0', 700: '#1f45b8' } }
+          fontFamily: { sans: ['Inter', 'Noto Sans Devanagari', 'system-ui', 'sans-serif'] },
+          colors: {
+            ink: { 800: '#12305a', 900: '#0b1f3a' },
+            brand: { 50: '#eef4ff', 100: '#dbe7ff', 500: '#3b6ef6', 600: '#2957e0', 700: '#1f45b8' }
+          }
         }
       }
     }
   </script>
   <link rel="stylesheet" href="/static/app.css">
 </head>
-<body class="min-h-screen bg-slate-50 font-sans text-slate-800 antialiased">
-  <header class="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur">
-    <div class="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-      <a href="/" class="flex items-center gap-2">
-        <span class="grid h-8 w-8 place-items-center rounded-lg bg-brand-600 text-sm font-bold text-white">CC</span>
-        <span class="text-lg font-semibold tracking-tight">{{ app_name }}</span>
+<body class="flex min-h-screen flex-col bg-slate-100 font-sans text-slate-800 antialiased">
+  <header class="sticky top-0 z-10 bg-ink-900 text-white shadow-sm">
+    <div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+      <a href="/" class="flex items-center gap-2.5">
+        <span class="grid h-9 w-9 place-items-center rounded-lg bg-white/10 ring-1 ring-white/20">
+          <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>
+        </span>
+        <span>
+          <span class="block text-base font-semibold leading-tight tracking-tight">{{ app_name }}</span>
+          <span class="hidden text-[11px] leading-tight text-slate-300 sm:block">Health claim clarity</span>
+        </span>
       </a>
-      <nav class="flex items-center gap-1 text-sm font-medium">
-        {% if user %}
-          {% if user.role == 'insurer' %}
-          <a href="/insurer" class="nav-link nav-link-active">Claims queue</a>
-          {% else %}
-          <a href="/" class="nav-link nav-link-active">My claims</a>
-          {% endif %}
-          <span class="hidden px-2 text-xs text-slate-500 sm:inline">{{ user.name }} · {{ 'Insurer' if user.role == 'insurer' else 'Customer' }}</span>
-          <button id="logout-btn" class="nav-link" type="button">Sign out</button>
-        {% endif %}
+      {% if user %}
+      <nav class="flex items-center gap-3 text-sm">
+        <a href="{{ '/insurer' if user.role == 'insurer' else '/' }}" class="hidden rounded-md px-3 py-1.5 font-medium text-slate-200 hover:bg-white/10 sm:block">{{ 'Claims queue' if user.role == 'insurer' else 'My claims' }}</a>
+        <span class="flex items-center gap-2">
+          <span class="grid h-8 w-8 place-items-center rounded-full bg-brand-500 text-xs font-semibold">{{ user.name[0] }}</span>
+          <span class="hidden leading-tight sm:block">
+            <span class="block text-sm font-medium">{{ user.name }}</span>
+            <span class="block text-[11px] text-slate-300">{{ 'Insurer' if user.role == 'insurer' else 'Customer' }}</span>
+          </span>
+        </span>
+        <button id="logout-btn" class="rounded-md border border-white/20 px-3 py-1.5 text-xs font-medium text-slate-100 hover:bg-white/10" type="button">Sign out</button>
       </nav>
+      {% endif %}
     </div>
   </header>
 
-  <main class="mx-auto max-w-5xl px-4 py-8">
+  <main class="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
     {% block content %}{% endblock %}
   </main>
 
-  <footer class="mx-auto max-w-5xl px-4 pb-8 text-xs text-slate-400">
-    {{ app_name }} · {{ tagline }} · Built on Cloud Run, Firestore, and Gemini on Vertex AI
+  <footer class="border-t border-slate-200 bg-white">
+    <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-4 text-xs text-slate-500">
+      <span>{{ app_name }} · Demonstration build with fictional data. Estimates only; the insurer's assessment is final.</span>
+      <span>Cloud Run · Firestore · Cloud Storage · Gemini on Vertex AI</span>
+    </div>
   </footer>
 
-  <div id="toast" class="pointer-events-none fixed bottom-5 left-1/2 hidden -translate-x-1/2 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white shadow-lg"></div>
+  <div id="toast" class="pointer-events-none fixed bottom-5 left-1/2 z-30 hidden -translate-x-1/2 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white shadow-lg"></div>
   <script src="/static/app.js"></script>
   {% block scripts %}{% endblock %}
 </body>

@@ -1,13 +1,20 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="mx-auto max-w-md">
-  <section class="mb-6 text-center">
-    <h1 class="text-2xl font-bold tracking-tight text-slate-900">Sign in to {{ app_name }}</h1>
-    <p class="mt-2 text-sm text-slate-600">Customers check their own claims. Insurers review the claims queue.</p>
+<div class="mx-auto grid max-w-5xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:grid-cols-2">
+  <section class="bg-gradient-to-br from-ink-900 to-ink-800 p-8 text-white lg:p-10">
+    <p class="text-xs font-semibold uppercase tracking-widest text-brand-100">Health insurance claims</p>
+    <h1 class="mt-3 text-3xl font-bold leading-tight tracking-tight">Know what your insurer will pay, and why, before discharge.</h1>
+    <ul class="mt-8 space-y-4 text-sm text-slate-200">
+      <li class="flex gap-3"><span class="step-num">1</span><span><strong class="text-white">Every line checked.</strong> Your hospital bill is compared with your policy, line by line.</span></li>
+      <li class="flex gap-3"><span class="step-num">2</span><span><strong class="text-white">Every deduction explained.</strong> Each cut quotes the exact policy clause behind it.</span></li>
+      <li class="flex gap-3"><span class="step-num">3</span><span><strong class="text-white">Choices made visible.</strong> See how your room choice changes what you pay.</span></li>
+    </ul>
   </section>
 
-  <div class="card">
-    <form id="login-form" class="space-y-4">
+  <section class="p-8 lg:p-10">
+    <h2 class="text-xl font-semibold tracking-tight text-slate-900">Sign in</h2>
+    <p class="mt-1 text-sm text-slate-500">Customers check their own claims. Insurers review the claims queue.</p>
+    <form id="login-form" class="mt-6 space-y-4">
       <label class="block">
         <span class="text-sm font-medium text-slate-700">Email</span>
         <input id="email" type="email" class="input mt-1" autocomplete="username" required>
@@ -18,26 +25,26 @@
       </label>
       <button id="login-btn" class="btn w-full" type="submit">Sign in</button>
     </form>
-  </div>
 
-  {% if demo_accounts %}
-  <div class="card mt-4">
-    <h2 class="card-title">Demo accounts</h2>
-    <p class="mt-1 text-xs text-slate-500">This is a demonstration build with fictional data. Tap an account to fill in its details.</p>
-    <div class="mt-3 space-y-2">
-      {% for a in demo_accounts %}
-      <button type="button" class="demo-account flex w-full items-center justify-between rounded-lg border border-slate-200 p-3 text-left hover:bg-slate-50"
-              data-email="{{ a.email }}" data-password="{{ a.password }}">
-        <span>
-          <span class="block text-sm font-semibold text-slate-800">{{ a.name }}</span>
-          <span class="block text-xs text-slate-500">{{ a.email }}</span>
-        </span>
-        <span class="pill {{ 'pill-warn' if a.role == 'insurer' else 'pill-ok' }}">{{ 'Insurer' if a.role == 'insurer' else 'Customer' }}</span>
-      </button>
-      {% endfor %}
+    {% if demo_accounts %}
+    <div class="mt-8 border-t border-slate-200 pt-6">
+      <p class="eyebrow">Demo accounts</p>
+      <p class="mt-1 text-xs text-slate-500">Demonstration build with fictional data. Select an account to fill in its details.</p>
+      <div class="mt-3 space-y-2">
+        {% for a in demo_accounts %}
+        <button type="button" class="demo-account flex w-full items-center justify-between rounded-lg border border-slate-200 px-3 py-2.5 text-left hover:border-brand-500 hover:bg-brand-50"
+                data-email="{{ a.email }}" data-password="{{ a.password }}">
+          <span>
+            <span class="block text-sm font-semibold text-slate-800">{{ a.name }}</span>
+            <span class="block text-xs text-slate-500">{{ a.email }}</span>
+          </span>
+          <span class="pill {{ 'pill-info' if a.role == 'insurer' else 'pill-ok' }}">{{ 'Insurer' if a.role == 'insurer' else 'Customer' }}</span>
+        </button>
+        {% endfor %}
+      </div>
     </div>
-  </div>
-  {% endif %}
+    {% endif %}
+  </section>
 </div>
 {% endblock %}
 
@@ -47,6 +54,7 @@
     btn.addEventListener('click', () => {
       document.getElementById('email').value = btn.dataset.email;
       document.getElementById('password').value = btn.dataset.password;
+      document.getElementById('login-btn').focus();
     });
   });
 
