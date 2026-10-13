@@ -112,10 +112,15 @@
     excluded: ['Not payable', 'pill-bad'],
   };
 
+  // Quote each clause in full the first time it appears; after that, name it only.
+  const quoted = new Set();
   function clauseBox(clause) {
     const box = el('div', 'mt-2 rounded-md border-l-4 border-brand-500 bg-brand-50 px-3 py-2 text-xs text-slate-700');
     box.append(el('span', 'font-semibold', 'Clause ' + clause.ref + (clause.title ? ' · ' + clause.title : '')));
-    if (clause.text) box.append(el('p', 'mt-1 italic', '“' + clause.text + '”'));
+    if (clause.text && !quoted.has(clause.ref)) {
+      box.append(el('p', 'mt-1 italic', '“' + clause.text + '”'));
+      quoted.add(clause.ref);
+    }
     return box;
   }
 
