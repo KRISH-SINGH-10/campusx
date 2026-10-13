@@ -23,11 +23,12 @@
   <header class="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur">
     <div class="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
       <a href="/" class="flex items-center gap-2">
-        <span class="grid h-8 w-8 place-items-center rounded-lg bg-brand-600 text-sm font-bold text-white">CX</span>
+        <span class="grid h-8 w-8 place-items-center rounded-lg bg-brand-600 text-sm font-bold text-white">CC</span>
         <span class="text-lg font-semibold tracking-tight">{{ app_name }}</span>
       </a>
       <nav class="flex items-center gap-1 text-sm font-medium">
-        <a href="/" class="nav-link {% if active == 'home' %}nav-link-active{% endif %}">Home</a>
+        <a href="/" class="nav-link {% if active == 'home' %}nav-link-active{% endif %}">Patient</a>
+        <a href="/insurer" class="nav-link {% if active == 'insurer' %}nav-link-active{% endif %}">Insurer</a>
       </nav>
     </div>
   </header>

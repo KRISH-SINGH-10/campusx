@@ -27,6 +27,12 @@ def add(collection: str, data: dict) -> dict:
     return _clean(ref.get())
 
 
+def put(collection: str, doc_id: str, data: dict) -> None:
+    _db().collection(collection).document(doc_id).set(
+        {**data, "created_at": firestore.SERVER_TIMESTAMP}
+    )
+
+
 def get(collection: str, doc_id: str) -> dict | None:
     doc = _db().collection(collection).document(doc_id).get()
     return _clean(doc) if doc.exists else None

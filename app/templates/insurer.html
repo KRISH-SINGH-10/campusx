@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="mb-6">
+  <h1 class="text-2xl font-bold tracking-tight text-slate-900">Claims queue</h1>
+  <p class="mt-1 text-sm text-slate-500">Each claim arrives already checked against its policy, with a recommended payable amount.</p>
+</section>
+
+<section class="mb-6 grid gap-4 sm:grid-cols-3">
+  <div class="card"><p class="stat-label">Awaiting decision</p><p id="k-open" class="stat">–</p></div>
+  <div class="card"><p class="stat-label">Total billed</p><p id="k-billed" class="stat">–</p></div>
+  <div class="card"><p class="stat-label">Recommended payable</p><p id="k-payable" class="stat">–</p></div>
+</section>
+
+<section class="card overflow-hidden p-0">
+  <div id="queue" class="divide-y divide-slate-100"></div>
+  <p id="queue-empty" class="hidden p-6 text-sm text-slate-500">No claims yet. Check a bill from the Patient tab and it appears here.</p>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const rs = (n) => '₹' + Math.round(n).toLocaleString('en-IN');
+  const STATUS = {
+    submitted: ['Awaiting decision', 'pill-wait'],
+    approved: ['Approved', 'pill-ok'],
+    queried: ['Query raised', 'pill-warn'],
+    rejected: ['Rejected', 'pill-bad'],
+  };
+
+  async function load() {
+    const claims = await api('/api/claims');
+    const open = claims.filter((c) => c.status === 'submitted');
+    document.getElementById('k-open').textContent = open.length;
+    document.getElementById('k-billed').textContent = rs(claims.reduce((s, c) => s + c.totals.billed, 0));
+    document.getElementById('k-payable').textContent = rs(claims.reduce((s, c) => s + c.totals.payable, 0));
+    document.getElementById('queue-empty').classList.toggle('hidden', claims.length > 0);
+
+    const queue = document.getElementById('queue');
+    queue.replaceChildren();
+    for (const c of claims) {
+      const row = el('a', 'flex items-center justify-between gap-3 px-5 py-4 hover:bg-slate-50');
+      row.href = '/insurer/claims/' + c.id;
+      const left = el('div', 'min-w-0');
+      left.append(el('p', 'truncate text-sm font-semibold text-slate-900', c.patient_name + ' · ' + c.procedure));
+      const meta = el('p', 'text-xs text-slate-500', c.hospital_name + ' · billed ' + rs(c.totals.billed) + ' · payable ' + rs(c.totals.payable));
+      left.append(meta);
+      if (c.overbilling_count) left.append(el('p', 'mt-1 text-xs font-medium text-amber-700', c.overbilling_count + ' possible overbilling ' + (c.overbilling_count === 1 ? 'item' : 'items')));
+      const [label, cls] = STATUS[c.status] || STATUS.submitted;
+      row.append(left, el('span', 'pill shrink-0 ' + cls, label));
+      queue.append(row);
+    }
+  }
+
+  load().catch((e) => toast(e.message));
+  setInterval(() => load().catch(() => {}), 5000);
+</script>
+{% endblock %}

@@ -4,7 +4,8 @@
 param([switch]$Public)
 
 $gcloud = "$env:LOCALAPPDATA\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd"
-$access = if ($Public) { "--allow-unauthenticated" } else { "--no-allow-unauthenticated" }
+# Without -Public the current access setting is left as it is.
+$access = if ($Public) { @("--allow-unauthenticated") } else { @() }
 
 & $gcloud run deploy campusx `
   --source $PSScriptRoot `
@@ -13,5 +14,6 @@ $access = if ($Public) { "--allow-unauthenticated" } else { "--no-allow-unauthen
   --memory 1Gi `
   --min-instances 1 `
   --set-env-vars "GOOGLE_CLOUD_PROJECT=hackathon-511418" `
-  $access `
+  @access `
   --quiet
+

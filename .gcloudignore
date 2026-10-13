@@ -9,3 +9,5 @@ venv/
 *.log
 *.ps1
 README.md
+fraud-detection/
+scripts/

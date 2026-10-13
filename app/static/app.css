@@ -10,6 +10,7 @@
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-ghost { background: transparent; color: #475569; border: 1px solid #e2e8f0; }
 .btn-ghost:hover { background: #f8fafc; }
+.btn-ghost .spinner { border-color: #cbd5e1; border-top-color: #475569; }
 
 .input { width: 100%; padding: 0.55rem 0.75rem; border: 1px solid #cbd5e1; border-radius: 0.6rem; font-size: 0.875rem; background: #fff; }
 .input:focus { outline: 2px solid #3b6ef6; outline-offset: 1px; border-color: transparent; }
@@ -23,3 +24,9 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .ai-output { white-space: pre-wrap; line-height: 1.6; }
+
+.pill-warn { background: #fef3c7; color: #92400e; }
+.stat-label { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; }
+.stat { margin-top: 0.25rem; font-size: 1.6rem; font-weight: 700; color: #0f172a; }
+.file-input { display: block; width: 100%; font-size: 0.8rem; color: #64748b; border: 1px dashed #cbd5e1; border-radius: 0.6rem; padding: 0.6rem; background: #f8fafc; }
+.file-input::file-selector-button { margin-right: 0.75rem; border: 0; border-radius: 0.4rem; background: #e2e8f0; padding: 0.35rem 0.7rem; font-size: 0.75rem; font-weight: 600; color: #334155; cursor: pointer; }

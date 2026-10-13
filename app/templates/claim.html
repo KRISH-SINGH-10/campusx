@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+{% block content %}
+<div id="loading" class="py-16 text-center text-sm text-slate-500">Loading claim…</div>
+
+<div id="claim" class="hidden">
+  <div class="mb-6 flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <a href="{{ '/insurer' if role == 'insurer' else '/' }}" class="text-xs font-medium text-slate-500 hover:text-slate-800">&larr; {{ 'Claims queue' if role == 'insurer' else 'New check' }}</a>
+      <h1 id="c-title" class="mt-1 text-2xl font-bold tracking-tight text-slate-900"></h1>
+      <p id="c-sub" class="text-sm text-slate-500"></p>
+    </div>
+    <span id="c-status" class="pill"></span>
+  </div>
+
+  <div id="c-note" class="mb-4 hidden rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"></div>
+
+  <section class="mb-6 grid gap-4 sm:grid-cols-3">
+    <div class="card">
+      <p class="stat-label">Hospital bill</p>
+      <p id="t-billed" class="stat"></p>
+    </div>
+    <div class="card border-green-200 bg-green-50">
+      <p class="stat-label text-green-800">Insurer pays</p>
+      <p id="t-payable" class="stat text-green-800"></p>
+      <p id="t-pct" class="mt-1 text-xs text-green-700"></p>
+    </div>
+    <div class="card border-red-200 bg-red-50">
+      <p class="stat-label text-red-800">{{ 'Patient pays' if role == 'insurer' else 'You pay' }}</p>
+      <p id="t-you" class="stat text-red-800"></p>
+    </div>
+  </section>
+
+  <section id="sim" class="card mb-6 hidden">
+    <div class="flex flex-wrap items-baseline justify-between gap-2">
+      <h2 class="card-title">Room choice simulator</h2>
+      <p id="sim-cap" class="text-xs text-slate-500"></p>
+    </div>
+    <p class="mt-1 text-sm text-slate-600">Choosing a room above the policy limit cuts more than the room rent: doctor, surgery, nursing and test charges are reduced in the same ratio. Move the slider to see the effect.</p>
+    <input id="sim-range" type="range" class="mt-4 w-full accent-brand-600" min="0" step="1">
+    <div class="mt-3 grid grid-cols-3 gap-3 text-center">
+      <div><p class="stat-label">Room rent per day</p><p id="sim-rent" class="text-lg font-semibold text-slate-900"></p></div>
+      <div><p class="stat-label">Insurer pays</p><p id="sim-pay" class="text-lg font-semibold text-green-700"></p></div>
+      <div><p class="stat-label">You pay</p><p id="sim-you" class="text-lg font-semibold text-red-700"></p></div>
+    </div>
+    <p id="sim-msg" class="mt-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-700"></p>
+  </section>
+
+  <section class="card mb-6 overflow-hidden p-0">
+    <div class="flex items-center justify-between px-5 pt-5">
+      <h2 class="card-title">Line-by-line decision</h2>
+      <div class="flex gap-2 text-xs">
+        <span class="pill pill-ok">Payable</span><span class="pill pill-warn">Reduced</span><span class="pill pill-bad">Not payable</span>
+      </div>
+    </div>
+    <div id="lines" class="mt-3 divide-y divide-slate-100"></div>
+    <div id="steps" class="border-t border-slate-200 bg-slate-50 px-5 py-4 text-sm"></div>
+  </section>
+
+  {% if role == 'insurer' %}
+  <section class="card mb-6">
+    <h2 class="card-title">Decision</h2>
+    <p class="mt-1 text-sm text-slate-600">The recommended payable amount is above. Record your decision; the patient sees it immediately.</p>
+    <textarea id="d-note" class="input mt-3" rows="2" maxlength="1000" placeholder="Note to the patient (optional)"></textarea>
+    <div class="mt-3 flex flex-wrap gap-2">
+      <button class="btn decide" data-status="approved" type="button">Approve payable amount</button>
+      <button class="btn btn-ghost decide" data-status="queried" type="button">Raise a query</button>
+      <button class="btn btn-ghost decide" data-status="rejected" type="button">Reject</button>
+    </div>
+  </section>
+  {% else %}
+  <section class="grid gap-4 lg:grid-cols-2">
+    <div class="card">
+      <h2 class="card-title">Explain it simply</h2>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <button class="btn btn-ghost explain" data-lang="English" type="button">English</button>
+        <button class="btn btn-ghost explain" data-lang="Hindi" type="button">हिन्दी</button>
+        <button class="btn btn-ghost explain" data-lang="Marathi" type="button">मराठी</button>
+      </div>
+      <div id="explain-out" class="ai-output mt-4 hidden rounded-lg bg-slate-50 p-3 text-sm text-slate-700"></div>
+    </div>
+    <div class="card">
+      <h2 class="card-title">Dispute a deduction</h2>
+      <p class="mt-1 text-sm text-slate-600">Drafts a grievance letter that quotes the policy's own clauses.</p>
+      <div class="mt-3 flex gap-2">
+        <button id="appeal-btn" class="btn" type="button">Draft appeal letter</button>
+        <button id="appeal-copy" class="btn btn-ghost hidden" type="button">Copy</button>
+      </div>
+      <div id="appeal-out" class="ai-output mt-4 hidden rounded-lg bg-slate-50 p-3 text-sm text-slate-700"></div>
+    </div>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const CLAIM_ID = {{ claim_id | tojson }};
+  const ROLE = {{ role | tojson }};
+  const rs = (n) => '₹' + Math.round(n).toLocaleString('en-IN');
+  const $ = (id) => document.getElementById(id);
+
+  const STATUS = {
+    submitted: ['Awaiting insurer', 'pill-wait'],
+    approved: ['Approved by insurer', 'pill-ok'],
+    queried: ['Query raised by insurer', 'pill-warn'],
+    rejected: ['Rejected by insurer', 'pill-bad'],
+  };
+  const LINE = {
+    payable: ['Payable', 'pill-ok'],
+    capped: ['Capped', 'pill-warn'],
+    reduced: ['Reduced', 'pill-warn'],
+    excluded: ['Not payable', 'pill-bad'],
+  };
+
+  function clauseBox(clause) {
+    const box = el('div', 'mt-2 rounded-md border-l-4 border-brand-500 bg-brand-50 px-3 py-2 text-xs text-slate-700');
+    box.append(el('span', 'font-semibold', 'Clause ' + clause.ref + (clause.title ? ' · ' + clause.title : '')));
+    if (clause.text) box.append(el('p', 'mt-1 italic', '“' + clause.text + '”'));
+    return box;
+  }
+
+  function renderStatus(claim) {
+    const [label, cls] = STATUS[claim.status] || STATUS.submitted;
+    $('c-status').textContent = label;
+    $('c-status').className = 'pill ' + cls;
+    const note = $('c-note');
+    if (claim.insurer_note) {
+      note.textContent = 'Note from insurer: ' + claim.insurer_note;
+      note.classList.remove('hidden');
+    } else {
+      note.classList.add('hidden');
+    }
+  }
+
+  function renderLines(result) {
+    const wrap = $('lines');
+    wrap.replaceChildren();
+    for (const l of result.lines) {
+      const row = el('div', 'px-5 py-3');
+      const top = el('div', 'flex items-start justify-between gap-3');
+      const left = el('div', 'min-w-0');
+      left.append(el('p', 'text-sm font-medium text-slate-900', l.description));
+      left.append(el('p', 'text-xs text-slate-500', l.quantity + ' × ' + rs(l.unit_price)));
+      const right = el('div', 'shrink-0 text-right');
+      const [label, cls] = LINE[l.status];
+      right.append(el('span', 'pill ' + cls, label));
+      const amounts = el('p', 'mt-1 text-sm');
+      if (l.deducted > 0) {
+        amounts.append(el('span', 'text-slate-400 line-through', rs(l.billed)), ' ', el('span', 'font-semibold text-slate-900', rs(l.payable)));
+      } else {
+        amounts.append(el('span', 'font-semibold text-slate-900', rs(l.payable)));
+      }
+      right.append(amounts);
+      top.append(left, right);
+      row.append(top);
+      if (l.status !== 'payable') {
+        row.append(el('p', 'mt-2 text-sm text-slate-700', l.reason));
+        if (l.clause) row.append(clauseBox(l.clause));
+      }
+      if (l.overbilling_flag) {
+        row.append(el('p', 'mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900', 'Possible overbilling: ' + l.overbilling_flag));
+      }
+      wrap.append(row);
+    }
+
+    const steps = $('steps');
+    steps.replaceChildren();
+    const admissible = result.lines.reduce((s, l) => s + l.payable, 0);
+    const line = (label, value, cls) => {
+      const r = el('div', 'flex justify-between py-1 ' + (cls || ''));
+      r.append(el('span', '', label), el('span', '', value));
+      return r;
+    };
+    steps.append(line('Admissible after line checks', rs(admissible)));
+    for (const s of result.steps) {
+      steps.append(line('Less: ' + s.label, '− ' + rs(s.amount), 'text-red-700'));
+      steps.append(el('p', 'text-xs text-slate-500', s.reason));
+      if (s.clause) steps.append(clauseBox(s.clause));
+    }
+    steps.append(line('Insurer pays', rs(result.totals.payable), 'mt-2 border-t border-slate-200 pt-2 font-semibold text-slate-900'));
+  }
+
+  function renderSim(claim) {
+    const curve = claim.room_curve || [];
+    const room = claim.result.room;
+    if (ROLE !== 'patient' || curve.length < 2 || !room.cap_per_day) return;
+    $('sim').classList.remove('hidden');
+    $('sim-cap').textContent = 'Policy limit: ' + rs(room.cap_per_day) + ' per day';
+    const range = $('sim-range');
+    range.max = curve.length - 1;
+    const start = curve.findIndex((p) => p.rent === Math.round(room.billed_per_day));
+    range.value = start < 0 ? 0 : start;
+    const billedPoint = curve[start < 0 ? 0 : start];
+    const show = () => {
+      const p = curve[Number(range.value)];
+      $('sim-rent').textContent = rs(p.rent);
+      $('sim-pay').textContent = rs(p.payable);
+      $('sim-you').textContent = rs(p.you_pay);
+      const diff = p.you_pay - billedPoint.you_pay;
+      const msg = $('sim-msg');
+      if (p.rent === billedPoint.rent) {
+        msg.textContent = 'This is the room on the bill.';
+      } else if (diff < 0) {
+        msg.textContent = 'At this room rent you would pay ' + rs(-diff) + ' less out of pocket than with the room on the bill.';
+      } else if (diff > 0) {
+        msg.textContent = 'At this room rent you would pay ' + rs(diff) + ' more out of pocket than with the room on the bill.';
+      } else {
+        msg.textContent = 'Same out-of-pocket amount as the room on the bill.';
+      }
+    };
+    range.addEventListener('input', show);
+    show();
+  }
+
+  async function load() {
+    const claim = await api('/api/claims/' + CLAIM_ID);
+    const b = claim.bill, t = claim.result.totals;
+    $('c-title').textContent = b.procedure;
+    $('c-sub').textContent = b.patient_name + ' · ' + b.hospital_name + ' · ' + claim.policy.policy_name;
+    $('t-billed').textContent = rs(t.billed);
+    $('t-payable').textContent = rs(t.payable);
+    $('t-pct').textContent = t.covered_percent + '% of the bill';
+    $('t-you').textContent = rs(t.you_pay);
+    renderStatus(claim);
+    renderLines(claim.result);
+    renderSim(claim);
+    $('loading').classList.add('hidden');
+    $('claim').classList.remove('hidden');
+    if (ROLE === 'patient') {
+      setInterval(async () => {
+        try { renderStatus(await api('/api/claims/' + CLAIM_ID)); } catch (e) {}
+      }, 5000);
+    }
+  }
+
+  document.querySelectorAll('.explain').forEach((btn) => {
+    btn.addEventListener('click', () => withBusy(btn, async () => {
+      const data = await api('/api/claims/' + CLAIM_ID + '/explain', { json: { language: btn.dataset.lang } });
+      $('explain-out').textContent = data.text;
+      $('explain-out').classList.remove('hidden');
+    }));
+  });
+
+  const appealBtn = $('appeal-btn');
+  if (appealBtn) {
+    appealBtn.addEventListener('click', () => withBusy(appealBtn, async () => {
+      const data = await api('/api/claims/' + CLAIM_ID + '/appeal', { method: 'POST' });
+      $('appeal-out').textContent = data.text;
+      $('appeal-out').classList.remove('hidden');
+      $('appeal-copy').classList.remove('hidden');
+    }));
+    $('appeal-copy').addEventListener('click', async () => {
+      await navigator.clipboard.writeText($('appeal-out').textContent);
+      toast('Letter copied');
+    });
+  }
+
+  document.querySelectorAll('.decide').forEach((btn) => {
+    btn.addEventListener('click', () => withBusy(btn, async () => {
+      const claim = await api('/api/claims/' + CLAIM_ID + '/decision', { json: { status: btn.dataset.status, note: $('d-note').value.trim() } });
+      renderStatus(claim);
+      toast('Decision recorded');
+    }));
+  });
+
+  load().catch((e) => { $('loading').textContent = e.message; });
+</script>
+{% endblock %}
