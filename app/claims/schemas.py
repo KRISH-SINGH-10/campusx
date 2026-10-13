@@ -26,6 +26,11 @@ class BillItem(BaseModel):
 
 
 class Bill(BaseModel):
+    is_hospital_bill: bool = Field(
+        default=True, description="False if the document is not a hospital or medical bill"
+    )
+    document_kind: str = Field(default="", description="What the document is, in a few words")
+    currency: str = Field(default="INR", description="ISO currency code of the amounts, e.g. INR")
     patient_name: str
     hospital_name: str
     admission_date: str
@@ -55,6 +60,12 @@ class ClauseText(BaseModel):
 
 
 class Policy(BaseModel):
+    is_health_policy: bool = Field(
+        default=True,
+        description="False if the document is not a health or medical insurance policy "
+        "(for example a life, term, motor or travel policy, or an unrelated document)",
+    )
+    document_kind: str = Field(default="", description="What the document is, in a few words")
     insurer: str
     policy_name: str
     sum_insured: float

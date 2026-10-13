@@ -2,7 +2,10 @@
 from app.claims.schemas import Bill, Policy
 from app.services import ai
 
-BILL_PROMPT = """You are reading a hospital inpatient bill. Extract it exactly as printed.
+BILL_PROMPT = """You are reading a document that should be a hospital bill. Extract it exactly as printed.
+- First decide what the document is: set `is_hospital_bill` and describe it in `document_kind`.
+  If it is not a hospital or medical bill, return an empty `items` list.
+- Set `currency` to the ISO code of the amounts (INR for Indian rupees).
 - One entry in `items` per billed line. Do not include the total row.
 - `quantity` is the number of days or units, `unit_price` the rate, `amount` the line total.
 - Choose `category` from the allowed values: room_rent for any room, bed or boarding charge;
@@ -12,8 +15,13 @@ BILL_PROMPT = """You are reading a hospital inpatient bill. Extract it exactly a
   admission, food, attendant and other non-medical charges.
 - Do not invent lines or change any number."""
 
-POLICY_PROMPT = """You are reading a health insurance policy wording. Extract the terms that decide
-how much of a hospital bill is payable.
+POLICY_PROMPT = """You are reading a document that should be a health insurance policy wording. Extract
+the terms that decide how much of a hospital bill is payable.
+- First decide what the document is: set `is_health_policy` and describe it in `document_kind`.
+  A life, term, motor or travel policy is not a health policy.
+- A room rent limit given as a percentage of the sum insured must be converted to rupees per day.
+- Quote clause wording briefly: at most two sentences per clause, and only clauses that set a limit,
+  a co-payment, a deductible, a sub-limit or an exclusion of billed items.
 - Amounts are in rupees as plain numbers (5,00,000 becomes 500000).
 - For every limit, give the clause number it comes from in the matching *_clause field.
 - `non_payable`: one entry per group of excluded items, with short lowercase `keywords`

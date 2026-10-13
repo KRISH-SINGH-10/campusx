@@ -13,9 +13,13 @@ CLAIMS = "claims"
 EXTRACTIONS = "extractions"
 
 
+class ClaimInputError(Exception):
+    """The documents were read, but they are not what the check needs. The message is shown to the user."""
+
+
 def _cached(kind: str, data: bytes, mime_type: str) -> dict:
     """Reading a document takes several seconds, so remember each file by its hash."""
-    key = f"{kind}-{hashlib.sha256(data).hexdigest()[:32]}"
+    key = f"{kind}-v2-{hashlib.sha256(data).hexdigest()[:32]}"
     hit = db.get(EXTRACTIONS, key)
     if hit:
         return hit["data"]
@@ -69,6 +73,37 @@ def reviewer_summary(claim: dict) -> str:
     )
 
 
+def _warnings(bill: Bill, policy: Policy) -> list[str]:
+    """Things the reader should know before trusting the numbers."""
+    out = []
+    no_terms = not (
+        policy.room_rent_cap_per_day
+        or policy.icu_cap_per_day
+        or policy.copay_percent
+        or policy.deductible
+        or policy.non_payable
+        or policy.sublimits
+    )
+    if no_terms:
+        out.append(
+            "No limits, co-payment or exclusions were found in the policy document, so nothing was "
+            "deducted. Upload the full policy wording (not the summary or schedule) for a real check."
+        )
+    if bill.currency and bill.currency.upper() != "INR":
+        out.append(
+            f"The bill appears to be in {bill.currency.upper()}, not Indian rupees. "
+            "Amounts are shown as printed and may not be comparable with the policy limits."
+        )
+    printed = sum(i.amount for i in bill.items)
+    computed = sum(i.quantity * i.unit_price for i in bill.items)
+    if printed and abs(printed - computed) / printed > 0.02:
+        out.append(
+            "Some line totals on the bill do not equal quantity times rate. "
+            "Check the highlighted amounts against the original bill."
+        )
+    return out
+
+
 def create_claim(
     bill_bytes: bytes,
     bill_mime: str,
@@ -85,6 +120,14 @@ def create_claim(
         bill = Bill.model_validate(bill_job.result())
         policy = Policy.model_validate(policy_job.result())
         documents = docs_job.result()
+    if not bill.is_hospital_bill or not bill.items:
+        kind = f" It looks like: {bill.document_kind}." if bill.document_kind else ""
+        raise ClaimInputError(f"The first file does not look like a hospital bill.{kind}")
+    if not policy.is_health_policy:
+        kind = f" It looks like: {policy.document_kind}." if policy.document_kind else ""
+        raise ClaimInputError(
+            f"The second file is not a health insurance policy.{kind} Upload your health policy wording."
+        )
     if sample_title:
         # A sample bill is a worked example, so it is filed under the signed-in customer's own name.
         bill.patient_name = submitted_by
@@ -94,6 +137,7 @@ def create_claim(
             "title": sample_title or bill.procedure or bill.diagnosis or "Hospital claim",
             "sample": bool(sample_title),
             "submitted_by": submitted_by,
+            "warnings": _warnings(bill, policy),
             "documents": documents,
             "bill": bill.model_dump(),
             "policy": policy.model_dump(),

@@ -13,7 +13,8 @@
     <span id="c-status" class="pill"></span>
   </div>
 
-  <div id="c-note" class="mb-4 hidden rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"></div>
+  <div id="c-warnings" class="mb-4 space-y-2"></div>
+  <div id="c-note"class="mb-4 hidden rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"></div>
 
   <section class="mb-6 grid gap-4 sm:grid-cols-3">
     <div class="card">
@@ -279,6 +280,11 @@
     $('t-payable').textContent = rs(t.payable);
     $('t-pct').textContent = t.covered_percent + '% of the bill';
     $('t-you').textContent = rs(t.you_pay);
+    const warnings = $('c-warnings');
+    warnings.replaceChildren();
+    for (const w of claim.warnings || []) {
+      warnings.append(el('div', 'rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900', 'Please note: ' + w));
+    }
     renderStatus(claim);
     renderLines(claim.result);
     renderSim(claim);

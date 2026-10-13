@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from typing import Literal, Optional
 
@@ -12,6 +13,7 @@ from app import auth, config
 from app.claims import service
 from app.services import ai, db, storage
 
+log = logging.getLogger("claimclear")
 BASE = Path(__file__).parent
 SAMPLES_DIR = BASE / "static" / "samples"
 app = FastAPI(title=config.APP_NAME)
@@ -158,6 +160,12 @@ async def _read_upload(file: UploadFile) -> tuple[bytes, str]:
     if file.content_type not in ALLOWED_UPLOADS:
         raise HTTPException(415, "Upload a PDF, PNG, JPEG, or WebP file.")
     data = await file.read()
+    if not data:
+        raise HTTPException(
+            400,
+            f"“{file.filename}” arrived empty (0 bytes). If it is stored in OneDrive or another cloud "
+            "folder, open it once so it downloads fully, then try again.",
+        )
     if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(413, "File is larger than 10 MB.")
     return data, file.content_type
@@ -191,10 +199,15 @@ async def claims_create(
             submitted_by=user["name"],
             sample_title=SAMPLE_BILLS[sample]["title"] if sample else None,
         )
+    except service.ClaimInputError as e:
+        raise HTTPException(422, str(e))
     except Exception as e:
-        raise HTTPException(502, f"Could not read the documents: {str(e)[:200]}")
-    if not claim["bill"]["items"]:
-        raise HTTPException(422, "No billed lines were found in the hospital bill.")
+        log.exception("claim check failed")
+        raise HTTPException(
+            502,
+            "We could not read these documents. Check that each file opens normally and is a clear "
+            "PDF or photo, then try again.",
+        ) from e
     return {"id": claim["id"]}
 
 

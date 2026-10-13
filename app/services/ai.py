@@ -23,6 +23,9 @@ def _config(system: str | None, schema, temperature: float) -> types.GenerateCon
     if schema is not None:
         kwargs["response_mime_type"] = "application/json"
         kwargs["response_schema"] = schema
+        # Structured extraction is transcription, not reasoning: skip the model's
+        # thinking phase, which otherwise dominates the response time.
+        kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
     return types.GenerateContentConfig(**kwargs)
 
 
