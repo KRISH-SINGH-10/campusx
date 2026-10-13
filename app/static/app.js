@@ -11,9 +11,23 @@ async function api(path, options = {}) {
   const res = await fetch(path, opts);
   if (res.status === 204) return null;
   const data = await res.json().catch(() => ({}));
+  // Session expired or signed out in another tab: go back to sign-in.
+  if (res.status === 401 && location.pathname !== '/login') {
+    location.href = '/login';
+  }
   if (!res.ok) throw new Error(data.detail || `Request failed (${res.status})`);
   return data;
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+  const logout = document.getElementById('logout-btn');
+  if (logout) {
+    logout.addEventListener('click', async () => {
+      const data = await api('/api/logout', { method: 'POST' });
+      location.href = data.redirect;
+    });
+  }
+});
 
 function toast(message) {
   const el = document.getElementById('toast');

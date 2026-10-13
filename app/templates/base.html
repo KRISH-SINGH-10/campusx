@@ -27,8 +27,15 @@
         <span class="text-lg font-semibold tracking-tight">{{ app_name }}</span>
       </a>
       <nav class="flex items-center gap-1 text-sm font-medium">
-        <a href="/" class="nav-link {% if active == 'home' %}nav-link-active{% endif %}">Patient</a>
-        <a href="/insurer" class="nav-link {% if active == 'insurer' %}nav-link-active{% endif %}">Insurer</a>
+        {% if user %}
+          {% if user.role == 'insurer' %}
+          <a href="/insurer" class="nav-link nav-link-active">Claims queue</a>
+          {% else %}
+          <a href="/" class="nav-link nav-link-active">My claims</a>
+          {% endif %}
+          <span class="hidden px-2 text-xs text-slate-500 sm:inline">{{ user.name }} · {{ 'Insurer' if user.role == 'insurer' else 'Customer' }}</span>
+          <button id="logout-btn" class="nav-link" type="button">Sign out</button>
+        {% endif %}
       </nav>
     </div>
   </header>

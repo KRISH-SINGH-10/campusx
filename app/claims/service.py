@@ -41,6 +41,8 @@ def _room_curve(bill: Bill, policy: Policy) -> list[dict]:
     return [{"rent": r, **engine.simulate_room(bill, policy, r)} for r in points]
 
 
+# Each kind of document has its own folder in the bucket.
+_FOLDER = {"bill": "hospital-bills", "policy": "policy-documents"}
 _EXT = {"application/pdf": "pdf", "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}
 
 
@@ -48,7 +50,7 @@ def _store_documents(bill_bytes: bytes, bill_mime: str, policy_bytes: bytes, pol
     """Keep the originals so the insurer can open them. A storage failure must not block the decision."""
     out = {}
     for kind, data, mime in (("bill", bill_bytes, bill_mime), ("policy", policy_bytes, policy_mime)):
-        name = f"{kind}/{hashlib.sha256(data).hexdigest()[:32]}.{_EXT.get(mime, 'bin')}"
+        name = f"{_FOLDER[kind]}/{hashlib.sha256(data).hexdigest()[:32]}.{_EXT.get(mime, 'bin')}"
         try:
             out[kind] = storage.save(name, data, mime)
         except Exception as e:
@@ -67,7 +69,9 @@ def reviewer_summary(claim: dict) -> str:
     )
 
 
-def create_claim(bill_bytes: bytes, bill_mime: str, policy_bytes: bytes, policy_mime: str) -> dict:
+def create_claim(
+    bill_bytes: bytes, bill_mime: str, policy_bytes: bytes, policy_mime: str, owner: str
+) -> dict:
     with ThreadPoolExecutor(max_workers=2) as pool:
         bill_job = pool.submit(_cached, "bill", bill_bytes, bill_mime)
         policy_job = pool.submit(_cached, "policy", policy_bytes, policy_mime)
@@ -83,6 +87,7 @@ def create_claim(bill_bytes: bytes, bill_mime: str, policy_bytes: bytes, policy_
             "policy": policy.model_dump(),
             "result": engine.adjudicate(bill, policy),
             "room_curve": _room_curve(bill, policy),
+            "owner": owner,
             "status": "submitted",
             "insurer_note": "",
         },

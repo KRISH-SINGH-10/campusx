@@ -1,0 +1,5 @@
+[
+  {"email": "rohan@claimclear.demo", "password": "patient-demo-1", "role": "customer", "name": "Rohan Kulkarni"},
+  {"email": "ananya@claimclear.demo", "password": "patient-demo-2", "role": "customer", "name": "Ananya Deshmukh"},
+  {"email": "claims@suraksha.demo", "password": "insurer-demo-1", "role": "insurer", "name": "Suraksha Claims Desk"}
+]

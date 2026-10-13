@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="mx-auto max-w-md">
+  <section class="mb-6 text-center">
+    <h1 class="text-2xl font-bold tracking-tight text-slate-900">Sign in to {{ app_name }}</h1>
+    <p class="mt-2 text-sm text-slate-600">Customers check their own claims. Insurers review the claims queue.</p>
+  </section>
+
+  <div class="card">
+    <form id="login-form" class="space-y-4">
+      <label class="block">
+        <span class="text-sm font-medium text-slate-700">Email</span>
+        <input id="email" type="email" class="input mt-1" autocomplete="username" required>
+      </label>
+      <label class="block">
+        <span class="text-sm font-medium text-slate-700">Password</span>
+        <input id="password" type="password" class="input mt-1" autocomplete="current-password" required>
+      </label>
+      <button id="login-btn" class="btn w-full" type="submit">Sign in</button>
+    </form>
+  </div>
+
+  {% if demo_accounts %}
+  <div class="card mt-4">
+    <h2 class="card-title">Demo accounts</h2>
+    <p class="mt-1 text-xs text-slate-500">This is a demonstration build with fictional data. Tap an account to fill in its details.</p>
+    <div class="mt-3 space-y-2">
+      {% for a in demo_accounts %}
+      <button type="button" class="demo-account flex w-full items-center justify-between rounded-lg border border-slate-200 p-3 text-left hover:bg-slate-50"
+              data-email="{{ a.email }}" data-password="{{ a.password }}">
+        <span>
+          <span class="block text-sm font-semibold text-slate-800">{{ a.name }}</span>
+          <span class="block text-xs text-slate-500">{{ a.email }}</span>
+        </span>
+        <span class="pill {{ 'pill-warn' if a.role == 'insurer' else 'pill-ok' }}">{{ 'Insurer' if a.role == 'insurer' else 'Customer' }}</span>
+      </button>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.querySelectorAll('.demo-account').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.getElementById('email').value = btn.dataset.email;
+      document.getElementById('password').value = btn.dataset.password;
+    });
+  });
+
+  document.getElementById('login-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    withBusy(document.getElementById('login-btn'), async () => {
+      const data = await api('/api/login', {
+        json: {
+          email: document.getElementById('email').value,
+          password: document.getElementById('password').value,
+        },
+      });
+      location.href = data.redirect;
+    });
+  });
+</script>
+{% endblock %}
