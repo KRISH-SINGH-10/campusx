@@ -20,7 +20,7 @@
       </span>
       <div>
         <h2 class="card-title">Check your documents</h2>
-        <p class="text-xs text-slate-500">PDF or a clear photo, up to 10 MB each.</p>
+        <p class="text-xs text-slate-500">PDF or a clear photo. Up to 25 MB per file, 30 MB in total.</p>
       </div>
     </div>
     <form id="upload-form" class="mt-5 space-y-5">
@@ -45,6 +45,14 @@
         <input id="policy-file" type="file" accept="application/pdf,image/png,image/jpeg,image/webp" class="sr-only">
         <ul id="policy-list" class="mt-2 space-y-1.5"></ul>
       </div>
+      <label class="block">
+        <span class="flex items-baseline justify-between">
+          <span class="text-sm font-medium text-slate-700">Sum insured (₹)</span>
+          <span class="text-xs text-slate-500">Optional</span>
+        </span>
+        <input id="sum-insured" type="number" inputmode="numeric" min="10000" step="1000" class="input mt-1" placeholder="For example 500000">
+        <span class="mt-1 block text-xs text-slate-500">From your policy schedule. Needed when the policy sets room limits as a percentage of the sum insured.</span>
+      </label>
       <button id="upload-btn" class="btn w-full" type="submit">Check my claim</button>
     </form>
   </div>
@@ -174,9 +182,17 @@
     e.preventDefault();
     if (!bills.length) return toast('Add at least one hospital bill.');
     if (!policy) return toast('Add your insurance policy.');
+    const MB = 1024 * 1024;
+    const all = [...bills, policy];
+    const big = all.find((f) => f.size > 25 * MB);
+    if (big) return toast('“' + big.name + '” is larger than 25 MB.');
+    if (all.reduce((s, f) => s + f.size, 0) > 30 * MB) return toast('The files together are larger than 30 MB. Remove one or use smaller scans.');
+    if (all.some((f) => f.size === 0)) return toast('One of the files is empty (0 KB). Remove it and add a working copy.');
     const form = new FormData();
     bills.forEach((f) => form.append('bill', f));
     form.append('policy', policy);
+    const si = document.getElementById('sum-insured').value.trim();
+    if (si) form.append('sum_insured', si);
     submitClaim(form);
   });
 

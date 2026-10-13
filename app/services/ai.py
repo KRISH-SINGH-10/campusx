@@ -55,11 +55,18 @@ def analyze_file(
     schema=None,
     system: str | None = None,
     temperature: float = 0.2,
+    uri: str | None = None,
 ):
-    """Send an image or PDF with a prompt. Returns text, or parsed JSON if schema is given."""
+    """Send an image or PDF with a prompt. Returns text, or parsed JSON if schema is given.
+    Large files are passed by their Cloud Storage `uri` instead of inline bytes."""
+    part = (
+        types.Part.from_uri(file_uri=uri, mime_type=mime_type)
+        if uri
+        else types.Part.from_bytes(data=data, mime_type=mime_type)
+    )
     r = _client().models.generate_content(
         model=config.GEMINI_MODEL,
-        contents=[types.Part.from_bytes(data=data, mime_type=mime_type), prompt],
+        contents=[part, prompt],
         config=_config(system, schema, temperature),
     )
     return json.loads(r.text) if schema is not None else (r.text or "").strip()

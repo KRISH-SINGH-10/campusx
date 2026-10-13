@@ -36,7 +36,9 @@ ASSET_VERSION = hashlib.sha256(
 ).hexdigest()[:10]
 
 CLAIMS = service.CLAIMS
-MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+# Cloud Run refuses any single request above 32 MB, so all files together must fit under that.
+MAX_TOTAL_BYTES = 30 * 1024 * 1024
 MAX_BILLS = 5
 ALLOWED_UPLOADS = {"image/png", "image/jpeg", "image/webp", "application/pdf"}
 
@@ -194,7 +196,7 @@ async def _read_upload(file: UploadFile) -> tuple[bytes, str]:
             "folder, open it once so it downloads fully, then try again.",
         )
     if len(data) > MAX_UPLOAD_BYTES:
-        raise HTTPException(413, "File is larger than 10 MB.")
+        raise HTTPException(413, f"“{file.filename}” is larger than 25 MB.")
     return data, file.content_type
 
 
@@ -204,6 +206,7 @@ async def claims_create(
     sample: Optional[str] = Form(None),
     bill: list[UploadFile] = File(default=[]),
     policy: Optional[UploadFile] = File(None),
+    sum_insured: Optional[float] = Form(None),
 ):
     """Read the documents, run the decision engine, and store the claim.
     Several bill files may be sent for one hospital stay."""
@@ -220,8 +223,12 @@ async def claims_create(
             raise HTTPException(400, f"Attach at most {MAX_BILLS} bill files per claim.")
         bill_docs = [await _read_upload(f) for f in bill]
         policy_doc = await _read_upload(policy)
+        if sum(len(d) for d, _ in bill_docs) + len(policy_doc[0]) > MAX_TOTAL_BYTES:
+            raise HTTPException(413, "The files together are larger than 30 MB. Remove one or use smaller scans.")
     else:
         raise HTTPException(400, "Attach at least one hospital bill and the policy document.")
+    if sum_insured is not None and not 10_000 <= sum_insured <= 1_000_000_000:
+        raise HTTPException(400, "Enter the sum insured in rupees, for example 500000.")
 
     try:
         claim = service.create_claim(
@@ -230,6 +237,7 @@ async def claims_create(
             owner=user["email"],
             submitted_by=user["name"],
             sample_title=SAMPLE_BILLS[sample]["title"] if sample else None,
+            sum_insured=None if sample else sum_insured,
         )
     except service.ClaimInputError as e:
         raise HTTPException(422, str(e))

@@ -68,11 +68,22 @@ class Policy(BaseModel):
     document_kind: str = Field(default="", description="What the document is, in a few words")
     insurer: str
     policy_name: str
-    sum_insured: float
+    sum_insured: float = Field(description="0 if the document does not state it")
     room_rent_cap_per_day: Optional[float] = None
+    room_rent_cap_percent_of_si: Optional[float] = Field(
+        default=None, description="Room rent limit per day as a percentage of the sum insured, e.g. 1"
+    )
     room_rent_clause: Optional[str] = None
     icu_cap_per_day: Optional[float] = None
+    icu_cap_percent_of_si: Optional[float] = Field(
+        default=None, description="ICU limit per day as a percentage of the sum insured, e.g. 2"
+    )
     icu_clause: Optional[str] = None
+    conditional_notes: list[str] = Field(
+        default=[],
+        description="Limits or co-payments that apply only in some situations (age, zone, a named "
+        "illness), one short sentence each with its clause number. At most 5.",
+    )
     proportionate_deduction: bool = False
     proportionate_clause: Optional[str] = None
     copay_percent: float = 0

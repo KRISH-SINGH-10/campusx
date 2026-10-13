@@ -3,6 +3,7 @@ import hashlib
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
+from app import config
 from app.claims import engine, extract
 from app.claims.schemas import Bill, Policy
 from app.services import ai, db, storage
@@ -11,6 +12,7 @@ log = logging.getLogger("claimclear")
 
 CLAIMS = "claims"
 EXTRACTIONS = "extractions"
+INLINE_LIMIT_BYTES = 7 * 1024 * 1024
 
 
 class ClaimInputError(Exception):
@@ -19,17 +21,22 @@ class ClaimInputError(Exception):
 
 def _cached(kind: str, data: bytes, mime_type: str) -> dict:
     """Reading a document takes several seconds, so remember each file by its hash."""
-    key = f"{kind}-v2-{hashlib.sha256(data).hexdigest()[:32]}"
+    key = f"{kind}-v3-{hashlib.sha256(data).hexdigest()[:32]}"
     hit = db.get(EXTRACTIONS, key)
     if hit:
         return hit["data"]
     reader = extract.read_bill if kind == "bill" else extract.read_policy
+    # Big files go to Gemini by Cloud Storage reference; inline requests have a size ceiling.
+    uri = None
+    if len(data) > INLINE_LIMIT_BYTES:
+        name = _store(kind, data, mime_type)
+        uri = f"gs://{config.DOCS_BUCKET}/{name}" if name else None
     try:
-        parsed = reader(data, mime_type).model_dump()
+        parsed = reader(data, mime_type, uri).model_dump()
     except Exception as e:
         # One retry: an occasional reply fails to parse or times out.
         log.warning("reading %s failed, retrying: %s", kind, e)
-        parsed = reader(data, mime_type).model_dump()
+        parsed = reader(data, mime_type, uri).model_dump()
     db.put(EXTRACTIONS, key, {"data": parsed})
     return parsed
 
@@ -86,11 +93,36 @@ def reviewer_summary(claim: dict) -> str:
     )
 
 
+def _apply_sum_insured(policy: Policy, sum_insured: float | None) -> None:
+    """The sum insured usually sits in the policy schedule, not the wording, so the customer
+    can supply it. Limits written as a percentage of it are then turned into rupees."""
+    if sum_insured:
+        policy.sum_insured = sum_insured
+    if policy.sum_insured > 0:
+        if not policy.room_rent_cap_per_day and policy.room_rent_cap_percent_of_si:
+            policy.room_rent_cap_per_day = policy.sum_insured * policy.room_rent_cap_percent_of_si / 100
+        if not policy.icu_cap_per_day and policy.icu_cap_percent_of_si:
+            policy.icu_cap_per_day = policy.sum_insured * policy.icu_cap_percent_of_si / 100
+
+
 def _warnings(bill: Bill, policy: Policy) -> list[str]:
     """Things the reader should know before trusting the numbers."""
     out = []
+    if policy.sum_insured <= 0:
+        pending = policy.room_rent_cap_percent_of_si or policy.icu_cap_percent_of_si
+        out.append(
+            "The policy document does not state your sum insured (it is usually in the policy schedule)"
+            + (
+                ", and this policy limits room rent as a percentage of it, so the room limit could "
+                "not be applied. "
+                if pending
+                else ". "
+            )
+            + "Check again with your sum insured filled in for an accurate result."
+        )
     no_terms = not (
         policy.room_rent_cap_per_day
+        or policy.room_rent_cap_percent_of_si
         or policy.icu_cap_per_day
         or policy.copay_percent
         or policy.deductible
@@ -123,6 +155,7 @@ def create_claim(
     owner: str,
     submitted_by: str,
     sample_title: str | None = None,
+    sum_insured: float | None = None,
 ) -> dict:
     """bill_docs: one or more (bytes, mime type) hospital bills for the same stay."""
     with ThreadPoolExecutor(max_workers=8) as pool:
@@ -147,6 +180,7 @@ def create_claim(
             f"The policy file is not a health insurance policy.{kind} Upload your health policy wording."
         )
     bill, sources = _merge_bills(bills)
+    _apply_sum_insured(policy, sum_insured)
     extra_warnings = []
     patients = {b.patient_name.strip().lower() for b in bills if b.patient_name.strip()}
     if len(patients) > 1:
@@ -164,6 +198,7 @@ def create_claim(
             "sample": bool(sample_title),
             "submitted_by": submitted_by,
             "warnings": extra_warnings + _warnings(bill, policy),
+            "notes": policy.conditional_notes[:5],
             "documents": documents,
             "bill_count": len(bills),
             "line_sources": sources,

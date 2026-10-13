@@ -19,7 +19,12 @@ POLICY_PROMPT = """You are reading a document that should be a health insurance 
 the terms that decide how much of a hospital bill is payable.
 - First decide what the document is: set `is_health_policy` and describe it in `document_kind`.
   A life, term, motor or travel policy is not a health policy.
-- A room rent limit given as a percentage of the sum insured must be converted to rupees per day.
+- Policy wordings often leave the sum insured to a separate schedule. If it is not stated, set
+  `sum_insured` to 0; never guess it.
+- A room rent or ICU limit given as a percentage of the sum insured goes in the matching
+  `*_percent_of_si` field as a number (1 for 1%). Use `*_cap_per_day` only for a limit in rupees.
+- `copay_percent` and `deductible` are only for amounts that apply to every claim. A co-payment or
+  limit that depends on age, zone, or a named illness goes in `conditional_notes` instead.
 - Quote clause wording briefly: at most two sentences per clause, and only clauses that set a limit,
   a co-payment, a deductible, a sub-limit or an exclusion of billed items.
 - Amounts are in rupees as plain numbers (5,00,000 becomes 500000).
@@ -31,9 +36,13 @@ the terms that decide how much of a hospital bill is payable.
 - If a term is not in the document, leave it at its default. Do not guess."""
 
 
-def read_bill(data: bytes, mime_type: str) -> Bill:
-    return Bill.model_validate(ai.analyze_file(BILL_PROMPT, data, mime_type, schema=Bill, temperature=0))
+def read_bill(data: bytes, mime_type: str, uri: str | None = None) -> Bill:
+    return Bill.model_validate(
+        ai.analyze_file(BILL_PROMPT, data, mime_type, schema=Bill, temperature=0, uri=uri)
+    )
 
 
-def read_policy(data: bytes, mime_type: str) -> Policy:
-    return Policy.model_validate(ai.analyze_file(POLICY_PROMPT, data, mime_type, schema=Policy, temperature=0))
+def read_policy(data: bytes, mime_type: str, uri: str | None = None) -> Policy:
+    return Policy.model_validate(
+        ai.analyze_file(POLICY_PROMPT, data, mime_type, schema=Policy, temperature=0, uri=uri)
+    )

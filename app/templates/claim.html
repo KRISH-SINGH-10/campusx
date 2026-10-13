@@ -312,6 +312,14 @@
     for (const w of claim.warnings || []) {
       warnings.append(el('div', 'rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900', 'Please note: ' + w));
     }
+    if ((claim.notes || []).length) {
+      const box = el('div', 'rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900');
+      box.append(el('p', 'font-semibold', 'May also apply, depending on your situation (not included in the amounts below):'));
+      const ul = el('ul', 'mt-1 list-disc space-y-0.5 pl-5');
+      for (const n of claim.notes) ul.append(el('li', '', n));
+      box.append(ul);
+      warnings.append(box);
+    }
     renderStatus(claim);
     renderLines(claim.result);
     renderSim(claim);

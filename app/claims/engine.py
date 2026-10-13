@@ -168,7 +168,8 @@ def adjudicate(bill: Bill, policy: Policy) -> dict:
         )
         admissible -= c
 
-    if admissible > policy.sum_insured:
+    # A sum insured of 0 means "not stated in the document", not "nothing is covered".
+    if policy.sum_insured > 0 and admissible > policy.sum_insured:
         steps.append(
             {
                 "label": "Sum insured limit",
