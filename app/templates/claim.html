@@ -16,20 +16,26 @@
   <div id="c-warnings" class="mb-4 space-y-2"></div>
   <div id="c-note"class="mb-4 hidden rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"></div>
 
-  <section class="mb-6 grid gap-4 sm:grid-cols-3">
-    <div class="card">
+  <section class="mb-4 grid gap-4 sm:grid-cols-3">
+    <div class="card stat-card-bill rise">
       <p class="stat-label">Hospital bill</p>
       <p id="t-billed" class="stat"></p>
+      <p id="t-bills" class="mt-1 text-xs text-slate-500"></p>
     </div>
-    <div class="card border-green-200 bg-green-50">
+    <div class="card stat-card-pay rise rise-1">
       <p class="stat-label text-green-800">Insurer pays</p>
       <p id="t-payable" class="stat text-green-800"></p>
       <p id="t-pct" class="mt-1 text-xs text-green-700"></p>
     </div>
-    <div class="card border-red-200 bg-red-50">
+    <div class="card stat-card-you rise rise-2">
       <p class="stat-label text-red-800">{{ 'Patient pays' if role == 'insurer' else 'You pay' }}</p>
       <p id="t-you" class="stat text-red-800"></p>
+      <p id="t-you-pct" class="mt-1 text-xs text-red-700"></p>
     </div>
+  </section>
+  <section class="card rise rise-3 mb-6 !py-4">
+    <div class="mb-2 flex justify-between text-xs font-medium"><span class="text-green-700">Covered by insurer</span><span class="text-red-700">Out of pocket</span></div>
+    <div class="cover-track"><div id="cover-fill" class="cover-fill"></div></div>
   </section>
 
   <section id="sim" class="card mb-6 hidden">
@@ -112,6 +118,20 @@
   const rs = (n) => '₹' + Math.round(n).toLocaleString('en-IN');
   const $ = (id) => document.getElementById(id);
 
+  let SOURCES = [];
+  const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Animate a rupee figure up to its value.
+  function countUp(node, value) {
+    if (still) { node.textContent = rs(value); return; }
+    const start = performance.now(), ms = 900;
+    const tick = (now) => {
+      const p = Math.min(1, (now - start) / ms);
+      node.textContent = rs(value * (1 - Math.pow(1 - p, 3)));
+      if (p < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+
   const STATUS = {
     submitted: ['Awaiting insurer', 'pill-wait'],
     approved: ['Approved by insurer', 'pill-ok'],
@@ -153,12 +173,14 @@
   function renderLines(result) {
     const wrap = $('lines');
     wrap.replaceChildren();
-    for (const l of result.lines) {
-      const row = el('div', 'px-5 py-3');
+    const EDGE = { payable: 'border-l-emerald-400', capped: 'border-l-amber-400', reduced: 'border-l-amber-400', excluded: 'border-l-red-400' };
+    result.lines.forEach((l, idx) => {
+      const row = el('div', 'rise border-l-4 px-5 py-3 ' + EDGE[l.status]);
+      row.style.animationDelay = Math.min(idx * 35, 600) + 'ms';
       const top = el('div', 'flex items-start justify-between gap-3');
       const left = el('div', 'min-w-0');
       left.append(el('p', 'text-sm font-medium text-slate-900', l.description));
-      left.append(el('p', 'text-xs text-slate-500', l.quantity + ' × ' + rs(l.unit_price)));
+      left.append(el('p', 'text-xs text-slate-500', l.quantity + ' × ' + rs(l.unit_price) + (SOURCES[idx] ? ' · from bill ' + SOURCES[idx] : '')));
       const right = el('div', 'shrink-0 text-right');
       const [label, cls] = LINE[l.status];
       right.append(el('span', 'pill ' + cls, label));
@@ -179,7 +201,7 @@
         row.append(el('p', 'mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900', 'Possible overbilling: ' + l.overbilling_flag));
       }
       wrap.append(row);
-    }
+    });
 
     const steps = $('steps');
     steps.replaceChildren();
@@ -276,10 +298,15 @@
       item.append(el('dt', 'font-medium text-slate-400', k + ':'), el('dd', 'text-slate-600', v));
       meta.append(item);
     }
-    $('t-billed').textContent = rs(t.billed);
-    $('t-payable').textContent = rs(t.payable);
+    countUp($('t-billed'), t.billed);
+    countUp($('t-payable'), t.payable);
+    countUp($('t-you'), t.you_pay);
+    const nBills = claim.bill_count || 1;
+    $('t-bills').textContent = nBills > 1 ? nBills + ' bills combined · ' + claim.result.lines.length + ' lines' : claim.result.lines.length + ' billed lines';
     $('t-pct').textContent = t.covered_percent + '% of the bill';
-    $('t-you').textContent = rs(t.you_pay);
+    $('t-you-pct').textContent = (Math.round((100 - t.covered_percent) * 10) / 10) + '% of the bill';
+    SOURCES = nBills > 1 ? (claim.line_sources || []) : [];
+    setTimeout(() => { $('cover-fill').style.width = t.covered_percent + '%'; }, 150);
     const warnings = $('c-warnings');
     warnings.replaceChildren();
     for (const w of claim.warnings || []) {
@@ -292,13 +319,15 @@
     $('claim').classList.remove('hidden');
     if (ROLE === 'insurer') {
       const links = $('doc-links');
-      for (const kind of ['bill', 'policy']) {
-        if (!(claim.documents || {})[kind]) continue;
-        const a = el('a', 'text-brand-600 underline', 'Open original ' + kind);
-        a.href = '/api/claims/' + CLAIM_ID + '/documents/' + kind;
+      const docs = claim.documents || {};
+      const link = (label, href) => {
+        const a = el('a', 'text-brand-600 underline', label);
+        a.href = '/api/claims/' + CLAIM_ID + '/documents/' + href;
         a.target = '_blank';
         links.append(a);
-      }
+      };
+      (docs.bills || []).forEach((_, i) => link(docs.bills.length > 1 ? 'Bill ' + (i + 1) : 'Open original bill', 'bill?n=' + (i + 1)));
+      if (docs.policy) link('Open original policy', 'policy');
       api('/api/claims/' + CLAIM_ID + '/review', { method: 'POST' })
         .then((d) => { $('review-out').textContent = d.text; })
         .catch(() => { $('review-out').textContent = 'Summary unavailable. The decision above is unaffected.'; });

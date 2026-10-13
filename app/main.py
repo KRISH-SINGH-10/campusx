@@ -30,6 +30,7 @@ templates = Jinja2Templates(directory=BASE / "templates")
 
 CLAIMS = service.CLAIMS
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+MAX_BILLS = 5
 ALLOWED_UPLOADS = {"image/png", "image/jpeg", "image/webp", "application/pdf"}
 
 SAMPLE_POLICY = "policy-arogya-shield-gold.pdf"
@@ -100,6 +101,27 @@ def login(request: Request, body: LoginIn):
     user = auth.check(body.email, body.password)
     if not user:
         raise HTTPException(401, "Email or password is incorrect.")
+    request.session["user"] = user
+    return {"redirect": _home_for(user)}
+
+
+@app.get("/register", response_class=HTMLResponse)
+def register_page(request: Request):
+    user = auth.current(request)
+    if user:
+        return RedirectResponse(_home_for(user), status_code=303)
+    return page(request, "register.html", active="login")
+
+
+class RegisterIn(BaseModel):
+    name: str = Field(max_length=100)
+    email: str = Field(max_length=200)
+    password: str = Field(max_length=200)
+
+
+@app.post("/api/register", status_code=201)
+def register(request: Request, body: RegisterIn):
+    user = auth.register(body.name, body.email, body.password)
     request.session["user"] = user
     return {"redirect": _home_for(user)}
 
@@ -175,26 +197,31 @@ async def _read_upload(file: UploadFile) -> tuple[bytes, str]:
 async def claims_create(
     request: Request,
     sample: Optional[str] = Form(None),
-    bill: Optional[UploadFile] = File(None),
+    bill: list[UploadFile] = File(default=[]),
     policy: Optional[UploadFile] = File(None),
 ):
-    """Read both documents, run the decision engine, and store the claim."""
+    """Read the documents, run the decision engine, and store the claim.
+    Several bill files may be sent for one hospital stay."""
     user = auth.require(request, "customer")
     if sample:
         if sample not in SAMPLE_BILLS:
             raise HTTPException(400, "Unknown sample.")
-        bill_doc = ((SAMPLES_DIR / SAMPLE_BILLS[sample]["file"]).read_bytes(), "application/pdf")
+        if not user.get("demo", True):
+            raise HTTPException(403, "Worked examples are available on demo accounts only.")
+        bill_docs = [((SAMPLES_DIR / SAMPLE_BILLS[sample]["file"]).read_bytes(), "application/pdf")]
         policy_doc = ((SAMPLES_DIR / SAMPLE_POLICY).read_bytes(), "application/pdf")
     elif bill and policy:
-        bill_doc = await _read_upload(bill)
+        if len(bill) > MAX_BILLS:
+            raise HTTPException(400, f"Attach at most {MAX_BILLS} bill files per claim.")
+        bill_docs = [await _read_upload(f) for f in bill]
         policy_doc = await _read_upload(policy)
     else:
-        raise HTTPException(400, "Attach both the hospital bill and the policy document.")
+        raise HTTPException(400, "Attach at least one hospital bill and the policy document.")
 
     try:
         claim = service.create_claim(
-            *bill_doc,
-            *policy_doc,
+            bill_docs,
+            policy_doc,
             owner=user["email"],
             submitted_by=user["name"],
             sample_title=SAMPLE_BILLS[sample]["title"] if sample else None,
@@ -230,6 +257,7 @@ def claims_list(request: Request):
             "status": c.get("status"),
             "title": c.get("title") or c["bill"]["procedure"],
             "sample": c.get("sample", False),
+            "bill_count": c.get("bill_count", 1),
             "patient_name": c["bill"]["patient_name"],
             "hospital_name": c["bill"]["hospital_name"],
             "procedure": c["bill"]["procedure"],
@@ -278,9 +306,14 @@ def claims_review(request: Request, claim_id: str):
 
 
 @app.get("/api/claims/{claim_id}/documents/{kind}")
-def claims_document(request: Request, claim_id: str, kind: Literal["bill", "policy"]):
-    """Serve an original document from the private bucket."""
-    name = (_claim_for(request, claim_id).get("documents") or {}).get(kind)
+def claims_document(request: Request, claim_id: str, kind: Literal["bill", "policy"], n: int = 1):
+    """Serve an original document from the private bucket. `n` picks one of several bills."""
+    documents = _claim_for(request, claim_id).get("documents") or {}
+    if kind == "bill":
+        bills = documents.get("bills") or []
+        name = bills[n - 1] if 1 <= n <= len(bills) else None
+    else:
+        name = documents.get("policy")
     if not name:
         raise HTTPException(404, "Document not stored for this claim.")
     try:

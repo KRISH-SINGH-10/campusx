@@ -50,16 +50,29 @@ _FOLDER = {"bill": "hospital-bills", "policy": "policy-documents"}
 _EXT = {"application/pdf": "pdf", "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}
 
 
-def _store_documents(bill_bytes: bytes, bill_mime: str, policy_bytes: bytes, policy_mime: str) -> dict:
-    """Keep the originals so the insurer can open them. A storage failure must not block the decision."""
-    out = {}
-    for kind, data, mime in (("bill", bill_bytes, bill_mime), ("policy", policy_bytes, policy_mime)):
-        name = f"{_FOLDER[kind]}/{hashlib.sha256(data).hexdigest()[:32]}.{_EXT.get(mime, 'bin')}"
-        try:
-            out[kind] = storage.save(name, data, mime)
-        except Exception as e:
-            log.warning("storing %s failed: %s", kind, e)
-    return out
+def _store(kind: str, data: bytes, mime: str) -> str | None:
+    """Keep an original so the insurer can open it. A storage failure must not block the decision."""
+    name = f"{_FOLDER[kind]}/{hashlib.sha256(data).hexdigest()[:32]}.{_EXT.get(mime, 'bin')}"
+    try:
+        return storage.save(name, data, mime)
+    except Exception as e:
+        log.warning("storing %s failed: %s", kind, e)
+        return None
+
+
+def _merge_bills(bills: list[Bill]) -> tuple[Bill, list[int]]:
+    """One hospital stay can come as several bills (interim, pharmacy, final). Combine
+    their lines into one bill, remembering which document each line came from."""
+    merged = bills[0].model_copy(deep=True)
+    sources = [1] * len(merged.items)
+    for n, extra in enumerate(bills[1:], start=2):
+        merged.items.extend(extra.items)
+        sources.extend([n] * len(extra.items))
+        for field in ("patient_name", "hospital_name", "diagnosis", "procedure", "room_type",
+                      "admission_date", "discharge_date"):
+            if not getattr(merged, field):
+                setattr(merged, field, getattr(extra, field))
+    return merged, sources
 
 
 def reviewer_summary(claim: dict) -> str:
@@ -105,28 +118,41 @@ def _warnings(bill: Bill, policy: Policy) -> list[str]:
 
 
 def create_claim(
-    bill_bytes: bytes,
-    bill_mime: str,
-    policy_bytes: bytes,
-    policy_mime: str,
+    bill_docs: list[tuple[bytes, str]],
+    policy_doc: tuple[bytes, str],
     owner: str,
     submitted_by: str,
     sample_title: str | None = None,
 ) -> dict:
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        bill_job = pool.submit(_cached, "bill", bill_bytes, bill_mime)
-        policy_job = pool.submit(_cached, "policy", policy_bytes, policy_mime)
-        docs_job = pool.submit(_store_documents, bill_bytes, bill_mime, policy_bytes, policy_mime)
-        bill = Bill.model_validate(bill_job.result())
+    """bill_docs: one or more (bytes, mime type) hospital bills for the same stay."""
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        bill_jobs = [pool.submit(_cached, "bill", data, mime) for data, mime in bill_docs]
+        policy_job = pool.submit(_cached, "policy", *policy_doc)
+        bill_store = [pool.submit(_store, "bill", data, mime) for data, mime in bill_docs]
+        policy_store = pool.submit(_store, "policy", *policy_doc)
+        bills = [Bill.model_validate(j.result()) for j in bill_jobs]
         policy = Policy.model_validate(policy_job.result())
-        documents = docs_job.result()
-    if not bill.is_hospital_bill or not bill.items:
-        kind = f" It looks like: {bill.document_kind}." if bill.document_kind else ""
-        raise ClaimInputError(f"The first file does not look like a hospital bill.{kind}")
+        documents = {
+            "bills": [name for name in (j.result() for j in bill_store) if name],
+            "policy": policy_store.result(),
+        }
+    for n, b in enumerate(bills, start=1):
+        if not b.is_hospital_bill or not b.items:
+            which = f"Bill file {n}" if len(bills) > 1 else "The bill file"
+            kind = f" It looks like: {b.document_kind}." if b.document_kind else ""
+            raise ClaimInputError(f"{which} does not look like a hospital bill.{kind}")
     if not policy.is_health_policy:
         kind = f" It looks like: {policy.document_kind}." if policy.document_kind else ""
         raise ClaimInputError(
-            f"The second file is not a health insurance policy.{kind} Upload your health policy wording."
+            f"The policy file is not a health insurance policy.{kind} Upload your health policy wording."
+        )
+    bill, sources = _merge_bills(bills)
+    extra_warnings = []
+    patients = {b.patient_name.strip().lower() for b in bills if b.patient_name.strip()}
+    if len(patients) > 1:
+        extra_warnings.append(
+            "The bills name different patients. A claim should cover one patient's hospital stay; "
+            "check that every bill belongs to this claim."
         )
     if sample_title:
         # A sample bill is a worked example, so it is filed under the signed-in customer's own name.
@@ -137,8 +163,10 @@ def create_claim(
             "title": sample_title or bill.procedure or bill.diagnosis or "Hospital claim",
             "sample": bool(sample_title),
             "submitted_by": submitted_by,
-            "warnings": _warnings(bill, policy),
+            "warnings": extra_warnings + _warnings(bill, policy),
             "documents": documents,
+            "bill_count": len(bills),
+            "line_sources": sources,
             "bill": bill.model_dump(),
             "policy": policy.model_dump(),
             "result": engine.adjudicate(bill, policy),

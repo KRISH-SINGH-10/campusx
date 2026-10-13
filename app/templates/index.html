@@ -1,41 +1,69 @@
 {% extends "base.html" %}
+{% set is_demo = user.get('demo', True) %}
 {% block content %}
-<section class="mb-8">
-  <p class="eyebrow">Welcome, {{ user.name.split(' ')[0] }}</p>
-  <h1 class="mt-1 max-w-3xl text-3xl font-bold tracking-tight text-slate-900">Check a hospital bill against your policy.</h1>
-  <p class="mt-2 max-w-2xl text-slate-600">ClaimClear reads both documents, decides line by line what is payable, and quotes the policy clause behind every deduction.</p>
+<section class="hero-panel rise mb-6 overflow-hidden rounded-2xl p-7 text-white shadow-lg sm:p-9">
+  <p class="text-xs font-semibold uppercase tracking-widest text-sky-200">Welcome, {{ user.name.split(' ')[0] }}</p>
+  <h1 class="mt-2 max-w-3xl text-3xl font-bold leading-tight tracking-tight sm:text-4xl">Check a hospital bill against your policy.</h1>
+  <p class="mt-3 max-w-2xl text-slate-200">ClaimClear reads your documents, decides line by line what is payable, and quotes the policy clause behind every deduction.</p>
+  <div class="mt-6 grid gap-3 sm:grid-cols-3">
+    <div class="glass flex items-start gap-3 rounded-xl p-4"><span class="step-num">1</span><div><p class="text-sm font-semibold">Add your documents</p><p class="text-xs text-slate-200">Hospital bills and your policy wording.</p></div></div>
+    <div class="glass flex items-start gap-3 rounded-xl p-4"><span class="step-num">2</span><div><p class="text-sm font-semibold">Get a line-by-line decision</p><p class="text-xs text-slate-200">Payable, reduced, or not payable, with the clause.</p></div></div>
+    <div class="glass flex items-start gap-3 rounded-xl p-4"><span class="step-num">3</span><div><p class="text-sm font-semibold">Act on it</p><p class="text-xs text-slate-200">Compare rooms, get it explained, or dispute a cut.</p></div></div>
+  </div>
 </section>
 
-<section class="mb-6 grid gap-3 sm:grid-cols-3">
-  <div class="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4"><span class="step-num">1</span><div><p class="text-sm font-semibold text-slate-900">Add two documents</p><p class="text-xs text-slate-500">The hospital bill and your policy wording.</p></div></div>
-  <div class="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4"><span class="step-num">2</span><div><p class="text-sm font-semibold text-slate-900">Get a line-by-line decision</p><p class="text-xs text-slate-500">Payable, reduced, or not payable, with the clause.</p></div></div>
-  <div class="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4"><span class="step-num">3</span><div><p class="text-sm font-semibold text-slate-900">Act on it</p><p class="text-xs text-slate-500">Compare rooms, get it explained, or dispute a cut.</p></div></div>
-</section>
-
-<section class="grid gap-6 lg:grid-cols-2">
-  <div class="card">
-    <h2 class="card-title">Check your own documents</h2>
-    <p class="mt-1 text-xs text-slate-500">PDF or a clear photo, up to 10 MB each.</p>
-    <form id="upload-form" class="mt-4 space-y-4">
-      <label class="block">
-        <span class="text-sm font-medium text-slate-700">Hospital bill</span>
-        <input id="bill-file" type="file" required accept="application/pdf,image/png,image/jpeg,image/webp" class="file-input mt-1">
-      </label>
-      <label class="block">
+<section class="grid gap-6 {{ 'lg:grid-cols-2' if is_demo else '' }}">
+  <div class="card rise rise-1 {{ '' if is_demo else 'mx-auto w-full max-w-3xl' }}">
+    <div class="flex items-center gap-3">
+      <span class="icon-badge bg-brand-50 text-brand-600">
+        <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3"/></svg>
+      </span>
+      <div>
+        <h2 class="card-title">Check your documents</h2>
+        <p class="text-xs text-slate-500">PDF or a clear photo, up to 10 MB each.</p>
+      </div>
+    </div>
+    <form id="upload-form" class="mt-5 space-y-5">
+      <div>
+        <div class="flex items-baseline justify-between">
+          <span class="text-sm font-medium text-slate-700">Hospital bills</span>
+          <span class="text-xs text-slate-500">Up to 5 for one hospital stay</span>
+        </div>
+        <label class="dropzone mt-1" for="bill-file">
+          <span class="font-semibold text-brand-600">Choose bill files</span>
+          <span class="text-slate-500"> — interim, pharmacy and final bills can all go in</span>
+        </label>
+        <input id="bill-file" type="file" multiple accept="application/pdf,image/png,image/jpeg,image/webp" class="sr-only">
+        <ul id="bill-list" class="mt-2 space-y-1.5"></ul>
+      </div>
+      <div>
         <span class="text-sm font-medium text-slate-700">Insurance policy</span>
-        <input id="policy-file" type="file" required accept="application/pdf,image/png,image/jpeg,image/webp" class="file-input mt-1">
-      </label>
+        <label class="dropzone mt-1" for="policy-file">
+          <span class="font-semibold text-brand-600">Choose policy file</span>
+          <span class="text-slate-500"> — the full policy wording works best</span>
+        </label>
+        <input id="policy-file" type="file" accept="application/pdf,image/png,image/jpeg,image/webp" class="sr-only">
+        <ul id="policy-list" class="mt-2 space-y-1.5"></ul>
+      </div>
       <button id="upload-btn" class="btn w-full" type="submit">Check my claim</button>
     </form>
   </div>
 
-  <div class="card">
-    <h2 class="card-title">Or try a worked example</h2>
-    <p class="mt-1 text-xs text-slate-500">Three fictional bills checked against one fictional policy
-      (<a class="font-medium text-brand-600 hover:underline" href="/static/samples/{{ sample_policy }}" target="_blank">view the policy</a>).</p>
-    <div class="mt-4 space-y-2">
+  {% if is_demo %}
+  <div class="card rise rise-2">
+    <div class="flex items-center gap-3">
+      <span class="icon-badge bg-emerald-50 text-emerald-600">
+        <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h9"/></svg>
+      </span>
+      <div>
+        <h2 class="card-title">Or try a worked example</h2>
+        <p class="text-xs text-slate-500">Three fictional bills against one fictional policy
+          (<a class="font-medium text-brand-600 hover:underline" href="/static/samples/{{ sample_policy }}" target="_blank">view the policy</a>).</p>
+      </div>
+    </div>
+    <div class="mt-5 space-y-2">
       {% for key, s in samples.items() %}
-      <div class="flex items-center justify-between gap-3 rounded-lg border border-slate-200 p-3">
+      <div class="lift flex items-center justify-between gap-3 rounded-lg border border-slate-200 p-3">
         <div class="min-w-0">
           <p class="text-sm font-semibold text-slate-800">{{ s.title }}</p>
           <p class="text-xs text-slate-500">{{ s.blurb }}
@@ -46,9 +74,10 @@
       {% endfor %}
     </div>
   </div>
+  {% endif %}
 </section>
 
-<section class="card mt-6 overflow-hidden p-0">
+<section class="card rise rise-3 mt-6 overflow-hidden p-0">
   <div class="flex items-center justify-between px-6 pt-5">
     <h2 class="card-title">My claims</h2>
     <span id="mine-count" class="text-xs text-slate-500"></span>
@@ -57,27 +86,40 @@
   <p id="mine-empty" class="px-6 pb-6 pt-2 text-sm text-slate-500">You have no claims yet. Check a bill above and it will be listed here.</p>
 </section>
 
-<div id="working" class="fixed inset-0 z-20 hidden place-items-center bg-slate-900/50 p-4">
-  <div class="card w-full max-w-sm text-center">
-    <div class="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-4 border-brand-100 border-t-brand-600"></div>
-    <p class="font-semibold text-slate-900">Checking your claim</p>
-    <p id="working-step" class="mt-1 text-sm text-slate-500">Reading the hospital bill…</p>
+<div id="working" class="fixed inset-0 z-20 hidden place-items-center bg-slate-900/60 p-4 backdrop-blur-sm">
+  <div class="card rise w-full max-w-sm">
+    <p class="text-center font-semibold text-slate-900">Checking your claim</p>
+    <ol id="working-steps" class="mt-4 space-y-3 text-sm"></ol>
+    <div class="mt-5 h-1.5 overflow-hidden rounded-full bg-slate-100"><div class="progress-indeterminate h-full rounded-full bg-brand-600"></div></div>
   </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+  const MAX_BILLS = 5;
   const working = document.getElementById('working');
-  const steps = ['Reading the hospital bill…', 'Reading the policy wording…', 'Checking each line against the policy…', 'Almost done…'];
+  const STEPS = ['Reading the hospital bills', 'Reading the policy wording', 'Checking each line against the policy', 'Preparing your result'];
+
+  function renderSteps(active) {
+    const ol = document.getElementById('working-steps');
+    ol.replaceChildren();
+    STEPS.forEach((label, i) => {
+      const li = el('li', 'flex items-center gap-3 ' + (i > active ? 'text-slate-400' : 'text-slate-800'));
+      const dot = el('span', 'grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-bold ' +
+        (i < active ? 'bg-emerald-100 text-emerald-700' : i === active ? 'bg-brand-600 text-white pulse' : 'bg-slate-100 text-slate-400'),
+        i < active ? '✓' : String(i + 1));
+      li.append(dot, el('span', i === active ? 'font-semibold' : '', label));
+      ol.append(li);
+    });
+  }
 
   async function submitClaim(form) {
     working.classList.remove('hidden');
     working.classList.add('grid');
     let i = 0;
-    const stepEl = document.getElementById('working-step');
-    stepEl.textContent = steps[0];
-    const timer = setInterval(() => { i = Math.min(i + 1, steps.length - 1); stepEl.textContent = steps[i]; }, 4000);
+    renderSteps(0);
+    const timer = setInterval(() => { i = Math.min(i + 1, STEPS.length - 1); renderSteps(i); }, 4500);
     try {
       const data = await api('/api/claims', { method: 'POST', body: form });
       location.href = '/claims/' + data.id;
@@ -90,11 +132,51 @@
     }
   }
 
+  // Selected files are kept in our own lists so bills can be added in several goes and removed one by one.
+  let bills = [];
+  let policy = null;
+  const size = (n) => n < 1024 * 1024 ? Math.max(1, Math.round(n / 1024)) + ' KB' : (n / 1024 / 1024).toFixed(1) + ' MB';
+
+  function fileRow(file, onRemove) {
+    const li = el('li', 'file-chip');
+    const info = el('span', 'min-w-0 truncate');
+    info.append(el('span', 'font-medium text-slate-800', file.name), el('span', 'text-slate-400', ' · ' + size(file.size)));
+    const remove = el('button', 'shrink-0 text-xs font-semibold text-slate-400 hover:text-red-600', 'Remove');
+    remove.type = 'button';
+    remove.addEventListener('click', onRemove);
+    li.append(info, remove);
+    if (file.size === 0) li.append(el('span', 'basis-full text-xs font-medium text-red-600', 'This file is empty (0 KB). Download it again before uploading.'));
+    return li;
+  }
+
+  function renderFiles() {
+    const bl = document.getElementById('bill-list');
+    bl.replaceChildren(...bills.map((f, i) => fileRow(f, () => { bills.splice(i, 1); renderFiles(); })));
+    const pl = document.getElementById('policy-list');
+    pl.replaceChildren(...(policy ? [fileRow(policy, () => { policy = null; renderFiles(); })] : []));
+  }
+
+  document.getElementById('bill-file').addEventListener('change', (e) => {
+    for (const f of e.target.files) {
+      if (bills.length >= MAX_BILLS) { toast('You can attach up to ' + MAX_BILLS + ' bills per claim.'); break; }
+      if (!bills.some((b) => b.name === f.name && b.size === f.size)) bills.push(f);
+    }
+    e.target.value = '';
+    renderFiles();
+  });
+  document.getElementById('policy-file').addEventListener('change', (e) => {
+    policy = e.target.files[0] || policy;
+    e.target.value = '';
+    renderFiles();
+  });
+
   document.getElementById('upload-form').addEventListener('submit', (e) => {
     e.preventDefault();
+    if (!bills.length) return toast('Add at least one hospital bill.');
+    if (!policy) return toast('Add your insurance policy.');
     const form = new FormData();
-    form.append('bill', document.getElementById('bill-file').files[0]);
-    form.append('policy', document.getElementById('policy-file').files[0]);
+    bills.forEach((f) => form.append('bill', f));
+    form.append('policy', policy);
     submitClaim(form);
   });
 
@@ -120,13 +202,14 @@
     document.getElementById('mine-count').textContent = claims.length + (claims.length === 1 ? ' claim' : ' claims');
     const list = document.getElementById('mine-list');
     for (const c of claims) {
-      const row = el('a', 'flex items-center justify-between gap-3 px-6 py-4 hover:bg-slate-50');
+      const row = el('a', 'flex items-center justify-between gap-3 px-6 py-4 transition hover:bg-slate-50');
       row.href = '/claims/' + c.id;
       const left = el('div', 'min-w-0');
       const title = el('p', 'truncate text-sm font-semibold text-slate-900', c.title);
       if (c.sample) title.append(' ', el('span', 'pill pill-info ml-1 align-middle', 'Example'));
+      if (c.bill_count > 1) title.append(' ', el('span', 'pill pill-wait ml-1 align-middle', c.bill_count + ' bills'));
       left.append(title);
-      left.append(el('p', 'truncate text-xs text-slate-500', c.hospital_name + ' · billed ' + rs(c.totals.billed) + ' · insurer pays ' + rs(c.totals.payable)));
+      left.append(el('p', 'truncate text-xs text-slate-500', (c.hospital_name ? c.hospital_name + ' · ' : '') + 'billed ' + rs(c.totals.billed) + ' · insurer pays ' + rs(c.totals.payable)));
       const [label, cls] = STATUS[c.status] || STATUS.submitted;
       row.append(left, el('span', 'pill shrink-0 ' + cls, label));
       list.append(row);

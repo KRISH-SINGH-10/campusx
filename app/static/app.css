@@ -38,3 +38,41 @@
 
 .ai-output { white-space: pre-wrap; line-height: 1.7; }
 .step-num { display: grid; place-items: center; width: 1.75rem; height: 1.75rem; border-radius: 999px; background: #eef4ff; color: #2957e0; font-size: 0.8rem; font-weight: 700; flex-shrink: 0; }
+
+/* ---------- colour and motion ---------- */
+.hero-panel { background: radial-gradient(1100px 420px at 85% -20%, rgba(59, 110, 246, 0.55), transparent 60%), radial-gradient(700px 320px at 0% 120%, rgba(13, 148, 136, 0.45), transparent 60%), linear-gradient(135deg, #0b1f3a 0%, #12305a 55%, #1b3f7a 100%); }
+.glass { background: rgba(255, 255, 255, 0.09); border: 1px solid rgba(255, 255, 255, 0.16); backdrop-filter: blur(6px); }
+.hero-panel .step-num { background: rgba(255, 255, 255, 0.16); color: #fff; }
+.icon-badge { display: grid; place-items: center; width: 2.5rem; height: 2.5rem; border-radius: 0.75rem; flex-shrink: 0; }
+
+.dropzone { display: block; cursor: pointer; border: 1.5px dashed #b6c6e6; border-radius: 0.75rem; padding: 0.9rem 1rem; background: #f8fafc; font-size: 0.85rem; transition: border-color 0.15s, background 0.15s; }
+.dropzone:hover { border-color: #2957e0; background: #eef4ff; }
+.file-chip { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.5rem 0.75rem; border-radius: 0.6rem; background: #f1f5f9; font-size: 0.8rem; animation: rise 0.25s ease-out both; }
+
+.card { transition: box-shadow 0.2s, transform 0.2s; }
+.lift { transition: box-shadow 0.2s, transform 0.2s, border-color 0.2s; }
+.lift:hover { transform: translateY(-2px); border-color: #b6c6e6; box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08); }
+.btn:active { transform: translateY(1px); }
+
+@keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.rise { animation: rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.rise-1 { animation-delay: 0.06s; }
+.rise-2 { animation-delay: 0.12s; }
+.rise-3 { animation-delay: 0.18s; }
+.rise-4 { animation-delay: 0.24s; }
+
+@keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(41, 87, 224, 0.45); } 100% { box-shadow: 0 0 0 10px rgba(41, 87, 224, 0); } }
+.pulse { animation: pulse-ring 1.2s ease-out infinite; }
+@keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(350%); } }
+.progress-indeterminate { width: 30%; animation: slide 1.3s ease-in-out infinite; }
+
+.stat-card-pay { background: linear-gradient(135deg, #ecfdf5, #d1fae5); border-color: #a7f3d0; }
+.stat-card-you { background: linear-gradient(135deg, #fff1f2, #fee2e2); border-color: #fecaca; }
+.stat-card-bill { background: linear-gradient(135deg, #ffffff, #eef4ff); border-color: #dbe7ff; }
+.cover-track { height: 0.5rem; border-radius: 999px; background: #fee2e2; overflow: hidden; }
+.cover-fill { height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, #059669, #34d399); transition: width 1.1s cubic-bezier(0.2, 0.7, 0.2, 1); }
+
+@media (prefers-reduced-motion: reduce) {
+  .rise, .file-chip, .pulse, .progress-indeterminate { animation: none; }
+  .cover-fill, .lift, .card { transition: none; }
+}
