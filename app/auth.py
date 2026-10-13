@@ -65,17 +65,51 @@ def check(email: str, password: str) -> dict | None:
     return None
 
 
-def current(request: Request) -> dict | None:
-    return request.session.get("user")
+# The customer side and the insurer side are separate portals with separate sign-ins,
+# so one browser can hold a customer in one tab and an insurer in another.
+PORTALS = ("customer", "insurer")
+
+
+def _sessions(request: Request) -> dict:
+    legacy = request.session.pop("user", None)  # sessions from before the portals were split
+    if legacy:
+        request.session.setdefault(legacy["role"], legacy)
+    return request.session
+
+
+def sign_in(request: Request, user: dict) -> None:
+    _sessions(request)[user["role"]] = user
+
+
+def sign_out(request: Request, portal: str) -> None:
+    _sessions(request).pop(portal, None)
+
+
+def current(request: Request, portal: str) -> dict | None:
+    return _sessions(request).get(portal)
+
+
+def signed_in(request: Request) -> list[dict]:
+    return [u for u in (current(request, p) for p in PORTALS) if u]
+
+
+def portal_of(request: Request) -> str:
+    """Which portal a shared API call comes from: the page says so in a header
+    (or a query parameter on plain links); otherwise infer it from who is signed in."""
+    asked = request.headers.get("x-portal") or request.query_params.get("portal")
+    if asked in PORTALS:
+        return asked
+    present = [u["role"] for u in signed_in(request)]
+    return present[0] if len(present) == 1 else "customer"
 
 
 def require(request: Request, role: str | None = None) -> dict:
-    user = current(request)
-    if not user:
-        raise HTTPException(401, "Please sign in.")
-    if role and user["role"] != role:
+    user = current(request, role or portal_of(request))
+    if user:
+        return user
+    if role and signed_in(request):
         raise HTTPException(403, "This page is not available for your account.")
-    return user
+    raise HTTPException(401, "Please sign in.")
 
 
 def can_see(user: dict, claim: dict) -> bool:

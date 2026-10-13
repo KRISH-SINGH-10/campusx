@@ -60,7 +60,8 @@ SAMPLE_BILLS = {
 }
 
 
-def page(request: Request, name: str, **ctx) -> HTMLResponse:
+def page(request: Request, name: str, portal: str | None = None, **ctx) -> HTMLResponse:
+    """portal: which side this page belongs to; its signed-in user is shown in the header."""
     return templates.TemplateResponse(
         request,
         name,
@@ -68,7 +69,8 @@ def page(request: Request, name: str, **ctx) -> HTMLResponse:
             "app_name": config.APP_NAME,
             "tagline": config.APP_TAGLINE,
             "asset_version": ASSET_VERSION,
-            "user": auth.current(request),
+            "portal": portal,
+            "user": auth.current(request, portal) if portal else None,
             **ctx,
         },
     )
@@ -79,24 +81,21 @@ def _home_for(user: dict) -> str:
 
 
 def _page_guard(request: Request, role: str) -> RedirectResponse | None:
-    """Pages redirect instead of returning an error: to sign-in, or to the user's own side."""
-    user = auth.current(request)
-    if not user:
-        return RedirectResponse("/login", status_code=303)
-    if user["role"] != role:
-        return RedirectResponse(_home_for(user), status_code=303)
-    return None
+    """Pages redirect instead of returning an error: to the side the visitor is
+    signed in to, or to sign-in."""
+    if auth.current(request, role):
+        return None
+    others = auth.signed_in(request)
+    return RedirectResponse(_home_for(others[0]) if others else "/login", status_code=303)
 
 
 # ---------- sign-in ----------
 
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
-    user = auth.current(request)
-    if user:
-        return RedirectResponse(_home_for(user), status_code=303)
+    # Always shown, even when signed in, so the other portal can be opened in a second tab.
     demo = [a for a in auth.ACCOUNTS] if config.SHOW_DEMO_ACCOUNTS else []
-    return page(request, "login.html", active="login", demo_accounts=demo)
+    return page(request, "login.html", demo_accounts=demo, signed_in=auth.signed_in(request))
 
 
 class LoginIn(BaseModel):
@@ -109,16 +108,13 @@ def login(request: Request, body: LoginIn):
     user = auth.check(body.email, body.password)
     if not user:
         raise HTTPException(401, "Email or password is incorrect.")
-    request.session["user"] = user
+    auth.sign_in(request, user)
     return {"redirect": _home_for(user)}
 
 
 @app.get("/register", response_class=HTMLResponse)
 def register_page(request: Request):
-    user = auth.current(request)
-    if user:
-        return RedirectResponse(_home_for(user), status_code=303)
-    return page(request, "register.html", active="login")
+    return page(request, "register.html")
 
 
 class RegisterIn(BaseModel):
@@ -130,13 +126,14 @@ class RegisterIn(BaseModel):
 @app.post("/api/register", status_code=201)
 def register(request: Request, body: RegisterIn):
     user = auth.register(body.name, body.email, body.password)
-    request.session["user"] = user
+    auth.sign_in(request, user)
     return {"redirect": _home_for(user)}
 
 
 @app.post("/api/logout")
 def logout(request: Request):
-    request.session.clear()
+    """Signs out the portal the request came from; the other portal stays signed in."""
+    auth.sign_out(request, auth.portal_of(request))
     return {"redirect": "/login"}
 
 
@@ -145,26 +142,26 @@ def logout(request: Request):
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
     return _page_guard(request, "customer") or page(
-        request, "index.html", active="home", samples=SAMPLE_BILLS, sample_policy=SAMPLE_POLICY
+        request, "index.html", portal="customer", samples=SAMPLE_BILLS, sample_policy=SAMPLE_POLICY
     )
 
 
 @app.get("/claims/{claim_id}", response_class=HTMLResponse)
 def claim_page(request: Request, claim_id: str):
     return _page_guard(request, "customer") or page(
-        request, "claim.html", active="home", claim_id=claim_id, role="patient"
+        request, "claim.html", portal="customer", claim_id=claim_id, role="patient"
     )
 
 
 @app.get("/insurer", response_class=HTMLResponse)
 def insurer_queue(request: Request):
-    return _page_guard(request, "insurer") or page(request, "insurer.html", active="insurer")
+    return _page_guard(request, "insurer") or page(request, "insurer.html", portal="insurer")
 
 
 @app.get("/insurer/claims/{claim_id}", response_class=HTMLResponse)
 def insurer_claim(request: Request, claim_id: str):
     return _page_guard(request, "insurer") or page(
-        request, "claim.html", active="insurer", claim_id=claim_id, role="insurer"
+        request, "claim.html", portal="insurer", claim_id=claim_id, role="insurer"
     )
 
 

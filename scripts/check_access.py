@@ -52,3 +52,21 @@ expect("insurer decides", insurer.post(f"{BASE}/api/claims/{cid}/decision", json
 expect("owner sees decision", rohan.get(f"{BASE}/api/claims/{cid}").json()["status"], "approved")
 rohan.post(f"{BASE}/api/logout")
 expect("after sign-out", rohan.get(f"{BASE}/api/claims").status_code, 401)
+
+# One browser, two tabs: a customer and an insurer signed in at the same time.
+both = requests.Session()
+for key in ("ananya", "suraksha"):
+    a = by_name[key]
+    both.post(f"{BASE}/api/login", json={"email": a["email"], "password": a["password"]})
+C, I = {"X-Portal": "customer"}, {"X-Portal": "insurer"}
+expect("both: customer tab still shows customer", "Ananya Deshmukh" in both.get(f"{BASE}/").text, True)
+expect("both: insurer tab shows insurer", "Suraksha Claims Desk" in both.get(f"{BASE}/insurer").text, True)
+expect("both: customer tab lists only own claims", cid in [c["id"] for c in both.get(f"{BASE}/api/claims", headers=C).json()], False)
+expect("both: insurer tab lists all claims", cid in [c["id"] for c in both.get(f"{BASE}/api/claims", headers=I).json()], True)
+expect("both: customer tab cannot open another's claim", both.get(f"{BASE}/api/claims/{cid}", headers=C).status_code, 404)
+expect("both: insurer document link works", both.get(f"{BASE}/api/claims/{cid}/documents/bill?portal=insurer&n=1").status_code, 200)
+both.post(f"{BASE}/api/logout", headers=C)
+expect("both: customer signed out", both.get(f"{BASE}/api/claims", headers=C).status_code, 401)
+expect("both: insurer still signed in", both.get(f"{BASE}/api/claims", headers=I).status_code, 200)
+expect("both: customer page now goes to insurer side", both.get(f"{BASE}/", allow_redirects=False).headers.get("location"), "/insurer")
+expect("both: sign-in page still available", both.get(f"{BASE}/login", allow_redirects=False).status_code, 200)

@@ -14,6 +14,17 @@
   <section class="p-8 lg:p-10">
     <h2 class="text-xl font-semibold tracking-tight text-slate-900">Sign in</h2>
     <p class="mt-1 text-sm text-slate-500">Customers check their own claims. Insurers review the claims queue.</p>
+    {% if signed_in %}
+    <div class="mt-4 space-y-2">
+      {% for u in signed_in %}
+      <a href="{{ '/insurer' if u.role == 'insurer' else '/' }}" class="lift flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-sm">
+        <span><span class="font-semibold text-slate-900">{{ u.name }}</span> <span class="text-slate-500">is signed in as {{ 'insurer' if u.role == 'insurer' else 'customer' }}</span></span>
+        <span class="font-semibold text-emerald-700">Continue &rarr;</span>
+      </a>
+      {% endfor %}
+      <p class="text-xs text-slate-500">You can sign in to the other side below; both stay signed in, each in its own tab.</p>
+    </div>
+    {% endif %}
     <form id="login-form" class="mt-6 space-y-4">
       <label class="block">
         <span class="text-sm font-medium text-slate-700">Email</span>

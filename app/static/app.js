@@ -8,6 +8,8 @@ async function api(path, options = {}) {
     opts.body = JSON.stringify(opts.json);
     delete opts.json;
   }
+  // Tell the server which portal this tab is, since both can be signed in at once.
+  if (window.PORTAL) opts.headers = { ...(opts.headers || {}), 'X-Portal': window.PORTAL };
   const res = await fetch(path, opts);
   if (res.status === 204) return null;
   const data = await res.json().catch(() => ({}));

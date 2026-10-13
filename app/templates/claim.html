@@ -326,8 +326,8 @@
         a.target = '_blank';
         links.append(a);
       };
-      (docs.bills || []).forEach((_, i) => link(docs.bills.length > 1 ? 'Bill ' + (i + 1) : 'Open original bill', 'bill?n=' + (i + 1)));
-      if (docs.policy) link('Open original policy', 'policy');
+      (docs.bills || []).forEach((_, i) => link(docs.bills.length > 1 ? 'Bill ' + (i + 1) : 'Open original bill', 'bill?portal=insurer&n=' + (i + 1)));
+      if (docs.policy) link('Open original policy', 'policy?portal=insurer');
       api('/api/claims/' + CLAIM_ID + '/review', { method: 'POST' })
         .then((d) => { $('review-out').textContent = d.text; })
         .catch(() => { $('review-out').textContent = 'Summary unavailable. The decision above is unaffected.'; });
